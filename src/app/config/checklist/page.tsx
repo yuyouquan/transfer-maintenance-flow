@@ -53,6 +53,7 @@ const MOCK_VERSION_DIFF: ReadonlyArray<VersionDiffItem> = [
   { checkItem: '客户反馈问题清单已交接', status: '新增' },
   { checkItem: '版本分支管理策略确认', status: '新增' },
   { checkItem: '知识库文档归档确认', status: '新增' },
+  { checkItem: '自动化测试用例交接确认', status: '新增' },
   { checkItem: 'Jenkins编译界面所有参数需更新到准确', status: '修改' },
   { checkItem: '确认OTA首版到最新量升版本中间无断开', status: '修改' },
   { checkItem: '旧版测试环境说明', status: '删除' },
@@ -247,7 +248,7 @@ export default function ChecklistConfigPage() {
       >
         <div style={{ marginBottom: 16 }}>
           <Input
-            placeholder="搜索评审要素..."
+            placeholder="搜索转维材料..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}

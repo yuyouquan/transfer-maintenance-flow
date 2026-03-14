@@ -88,9 +88,9 @@ const hasAnyRoleEnteredReview = (app: TransferApplication): boolean => {
 
 const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseReviewRow> => {
   return app.pipeline.roleProgress.map((rp) => {
-    const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail'> = {
+    const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail' | '审核中'> = {
       not_started: 'N/A',
-      in_progress: 'N/A',
+      in_progress: '审核中',
       completed: 'PASS',
       rejected: 'Fail',
     };
@@ -195,7 +195,7 @@ export default function WorkbenchPage() {
       title: '评审结论', dataIndex: 'conclusion', key: 'conclusion', width: 100,
       render: (conclusion: CloseReviewRow['conclusion']) => {
         const config: Record<string, { color: string }> = {
-          PASS: { color: 'success' }, Fail: { color: 'error' }, 'N/A': { color: 'default' },
+          PASS: { color: 'success' }, Fail: { color: 'error' }, 'N/A': { color: 'default' }, '审核中': { color: 'processing' },
         };
         return <Tag color={config[conclusion]?.color ?? 'default'}>{conclusion}</Tag>;
       },
@@ -206,16 +206,18 @@ export default function WorkbenchPage() {
   // Main table columns
   const columns: ColumnsType<TransferApplication> = [
     {
-      title: '项目名', dataIndex: 'projectName', key: 'projectName', width: 240, ellipsis: true,
-      render: (text: string) => <Text strong style={{ color: '#1677ff' }}>{text}</Text>,
+      title: '项目名', dataIndex: 'projectName', key: 'projectName', ellipsis: true,
+      render: (text: string) => <Text strong style={{ color: '#4338ca', cursor: 'pointer' }}>{text}</Text>,
     },
-    { title: '发起人', dataIndex: 'applicant', key: 'applicant', width: 100 },
+    { title: '发起人', dataIndex: 'applicant', key: 'applicant', width: 80, align: 'center' },
     {
-      title: '节点', key: 'node', width: 160,
-      render: (_: unknown, record: TransferApplication) => getCurrentNodeLabel(record),
+      title: '当前节点', key: 'node', width: 160,
+      render: (_: unknown, record: TransferApplication) => (
+        <Text style={{ fontSize: 13 }}>{getCurrentNodeLabel(record)}</Text>
+      ),
     },
     {
-      title: '节点状态', key: 'nodeStatus', width: 100,
+      title: '状态', key: 'nodeStatus', width: 90, align: 'center',
       render: (_: unknown, record: TransferApplication) => {
         if (record.status === 'cancelled') return <Tag color="default">已关闭</Tag>;
         const status = getCurrentNodeStatus(record);
@@ -224,17 +226,17 @@ export default function WorkbenchPage() {
       },
     },
     {
-      title: '最后更新', dataIndex: 'updatedAt', key: 'updatedAt', width: 160,
-      render: (text: string) => new Date(text).toLocaleString('zh-CN', {
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-      }),
+      title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', width: 150,
+      render: (text: string) => (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {new Date(text).toLocaleString('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+          })}
+        </Text>
+      ),
     },
     {
-      title: '备注', dataIndex: 'remark', key: 'remark', width: 180, ellipsis: true,
-      render: (text: string) => text || '-',
-    },
-    {
-      title: '操作', key: 'action', width: 260, fixed: 'right',
+      title: '操作', key: 'action', width: 240, fixed: 'right',
       render: (_: unknown, record: TransferApplication) => {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
@@ -294,9 +296,13 @@ export default function WorkbenchPage() {
   return (
     <div style={{ padding: 24, maxWidth: 1600, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <Title level={3} style={{ margin: 0 }}>工作台</Title>
-        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={handleNavigateToApply}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
+          <Title level={3} style={{ margin: 0, letterSpacing: 1 }}>工作台</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>管理转维项目申请与待办任务</Text>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} size="large" onClick={handleNavigateToApply}
+          style={{ height: 44, paddingInline: 28, fontSize: 15, fontWeight: 600 }}>
           项目转维申请
         </Button>
       </div>
@@ -338,7 +344,7 @@ export default function WorkbenchPage() {
                 showTotal: (total) => `共 ${total} 条`,
                 size: 'small',
               }}
-              scroll={{ x: 1060 }}
+              scroll={{ x: 900 }}
               size="small"
               rowClassName={(record) => record.status === 'cancelled' ? 'ant-table-row-cancelled' : ''}
             />

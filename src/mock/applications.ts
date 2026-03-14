@@ -356,7 +356,7 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h003', applicationId: 'app-001', action: '资料录入', operator: '张三', detail: 'SPM角色：录入了"IPM/SPUG项目信息完整无误"的资料', timestamp: '2026-03-11T09:30:00Z' },
   { id: 'h004', applicationId: 'app-001', action: 'AI检查通过', operator: '系统', detail: 'SPM角色：IPM/SPUG项目信息检查通过', timestamp: '2026-03-11T09:31:00Z' },
   { id: 'h005', applicationId: 'app-001', action: '资料录入', operator: '李四', detail: '测试角色：录入了"确认OTA首版到最新量升版本中间无断开"的资料', timestamp: '2026-03-11T14:00:00Z' },
-  { id: 'h006', applicationId: 'app-001', action: '创建Block任务', operator: '郑十一', detail: '系统角色维护审核不通过，创建Block任务：系统编译配置文档链接无法访问', timestamp: '2026-03-12T11:00:00Z' },
+  { id: 'h006', applicationId: 'app-001', action: 'AI检查不通过', operator: '系统', detail: '系统角色：AI检查不通过，系统编译配置文档链接无法访问，已创建Block任务', timestamp: '2026-03-12T11:00:00Z' },
 ];
 
 // ============================================================
@@ -367,4 +367,5 @@ export const MOCK_TODOS: TodoItem[] = [
   { id: 'todo-001', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '张三', type: 'entry' },
   { id: 'todo-002', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
   { id: 'todo-003', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: '维护审核', responsiblePerson: '张三', type: 'review' },
+  { id: 'todo-004', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '钱七', type: 'entry' },
 ];

@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #4338ca;
+  --primary-light: #eef2ff;
+  --border-radius: 10px;
 }
 
 @theme inline {
@@ -12,15 +15,103 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: #f0f2f5;
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ===== Smooth transitions globally ===== */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Ant Design Card overrides ===== */
+.ant-card {
+  border-radius: var(--border-radius) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid #f0f0f0 !important;
+  transition: box-shadow 0.3s ease !important;
+}
+.ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* ===== Table polish ===== */
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: #fafbfc !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  color: #555 !important;
+  border-bottom: 2px solid #f0f0f0 !important;
+}
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  font-size: 13px !important;
+  transition: background 0.2s ease !important;
+}
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: #f8f9ff !important;
+}
+
+/* ===== Cancelled row dimmed ===== */
+.ant-table-row-cancelled > td {
+  opacity: 0.5;
+}
+.ant-table-row-cancelled:hover > td {
+  opacity: 0.7;
+}
+
+/* ===== Button polish ===== */
+.ant-btn {
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+}
+.ant-btn-primary {
+  box-shadow: 0 2px 6px rgba(67, 56, 202, 0.3) !important;
+}
+.ant-btn-primary:hover {
+  box-shadow: 0 4px 12px rgba(67, 56, 202, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+/* ===== Tag polish ===== */
+.ant-tag {
+  border-radius: 4px !important;
+  font-size: 12px !important;
+}
+
+/* ===== Modal polish ===== */
+.ant-modal-content {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* ===== Scrollbar polish ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* ===== Breadcrumb ===== */
+.ant-breadcrumb {
+  font-size: 14px !important;
+}
+
+/* ===== Smooth page transition feel ===== */
+.ant-layout-content {
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }

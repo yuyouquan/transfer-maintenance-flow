@@ -233,7 +233,7 @@ export interface TemplateVersion {
 export interface CloseReviewRow {
   readonly role: PipelineRole;
   readonly responsiblePerson: string;
-  readonly conclusion: 'N/A' | 'PASS' | 'Fail';
+  readonly conclusion: 'N/A' | 'PASS' | 'Fail' | '审核中';
   readonly comment: string;
 }
 
