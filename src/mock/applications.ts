@@ -207,6 +207,47 @@ export const MOCK_CHECKLIST_ITEMS: CheckListItem[] = [
     aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问',
     reviewStatus: 'not_reviewed',
   },
+  // --- app-002 checklist items (维护审核阶段) ---
+  {
+    id: 'cli-201', applicationId: 'app-002', seq: 1,
+    type: '检查项', checkItem: 'IPM/SPUG项目信息完整无误、版本流程全部走完',
+    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
+    reviewPerson: '张三', reviewPersonId: 'u001',
+    aiCheckRule: '通过IPM系统获取项目的所有版本计划的上市时间小于当前时间',
+    deliverables: [{ id: 'd201', name: 'IPM项目截图.png', url: '#', type: 'file' }],
+    entryContent: 'IPM系统确认所有版本计划已完成',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
+  },
+  {
+    id: 'cli-202', applicationId: 'app-002', seq: 2,
+    type: '检查项', checkItem: '确认OTA首版到最新量升版本中间无断开',
+    responsibleRole: '测试', entryPerson: '陈十三', entryPersonId: 'u011',
+    reviewPerson: '李四', reviewPersonId: 'u002',
+    aiCheckRule: '检查OTA部署表文档真实存在',
+    deliverables: [{ id: 'd202', name: 'OTA部署表.xlsx', url: '#', type: 'file' }],
+    entryContent: '确认OTA版本链路完整',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
+  },
+  {
+    id: 'cli-203', applicationId: 'app-002', seq: 3,
+    type: '交接资料', checkItem: '硬件散热方案/限流参数/CPU thermal参数',
+    responsibleRole: '底软', entryPerson: '褚十四', entryPersonId: 'u012',
+    reviewPerson: '赵六', reviewPersonId: 'u004',
+    aiCheckRule: '检查文本包含温升/热设计相关文档链接',
+    deliverables: [{ id: 'd203', name: '散热方案文档.pdf', url: '#', type: 'file' }],
+    entryContent: '散热方案文档已交接：https://feishu.cn/docs/thermal',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
+  },
+  {
+    id: 'cli-204', applicationId: 'app-002', seq: 4,
+    type: '交接资料', checkItem: '系统集成编译配置文档',
+    responsibleRole: '系统', entryPerson: '卫十五', entryPersonId: 'u013',
+    reviewPerson: '钱七', reviewPersonId: 'u005',
+    aiCheckRule: '检查文本包含系统集成编译配置',
+    deliverables: [{ id: 'd204', name: '编译配置.md', url: '#', type: 'file' }],
+    entryContent: '编译配置文档已更新完毕',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
+  },
 ];
 
 // ============================================================
@@ -245,6 +286,29 @@ export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
     deliverables: [],
     entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6870',
     entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
+  },
+  // --- app-002 review elements (维护审核阶段) ---
+  {
+    id: 'rei-201', applicationId: 'app-002', seq: 1,
+    standard: '项目管理', description: '查看项目版本计划与实际上市时间是否一致',
+    remark: '需提供IPM系统截图或链接',
+    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
+    reviewPerson: '张三', reviewPersonId: 'u001',
+    aiCheckRule: '检查文本是否包含IPM系统截图或链接',
+    deliverables: [{ id: 'rd201', name: 'IPM版本计划.pdf', url: '#', type: 'file' }],
+    entryContent: 'IPM系统版本计划与实际上市时间一致',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
+  },
+  {
+    id: 'rei-202', applicationId: 'app-002', seq: 2,
+    standard: '驱动完整性', description: '确认所有关键驱动模块已完整交接',
+    remark: '包括源码、文档、调试工具',
+    responsibleRole: '底软', entryPerson: '褚十四', entryPersonId: 'u012',
+    reviewPerson: '赵六', reviewPersonId: 'u004',
+    aiCheckRule: '检查文本是否包含驱动源码仓库链接',
+    deliverables: [],
+    entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6768',
+    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
   },
 ];
 

@@ -235,12 +235,43 @@ export default function WorkbenchPage() {
     },
     {
       title: '操作', key: 'action', width: 260, fixed: 'right',
-      render: (_: unknown, record: TransferApplication, index: number) => {
+      render: (_: unknown, record: TransferApplication) => {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
-        const showEntry = index === 0 && isInProgress;
-        const showReview = index === 1 && isInProgress;
-        const showClose = index === 0 && isApplicant && isInProgress;
+        const isSQA = record.team.research.some(
+          (m) => m.role === 'SQA' && m.id === currentUser.id
+        );
+
+        // 录入按钮：资料录入阶段 + 当前用户是录入责任人或角色负责人
+        const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
+        const hasEntryRole = record.pipeline.roleProgress.some((rp) => {
+          if (rp.entryStatus === 'completed' && rp.reviewStatus !== 'rejected') return false;
+          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
+          return record.team.research.some(
+            (m) => m.id === currentUser.id && m.role === roleMap[rp.role]
+          );
+        });
+        const showEntry = isInProgress && isInDataEntry && hasEntryRole;
+
+        // 评审按钮：维护审核阶段 + 当前用户是对应角色的维护审核人
+        const isInReview = record.pipeline.maintenanceReview === 'in_progress';
+        const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
+          if (rp.reviewStatus !== 'in_progress') return false;
+          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
+          return record.team.maintenance.some(
+            (m) => m.id === currentUser.id && m.role === roleMap[rp.role]
+          );
+        });
+        const showReview = isInProgress && isInReview && hasReviewRole;
+
+        // 关闭流水线按钮
+        const anyRoleInReview = record.pipeline.roleProgress.some(
+          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
+        );
+        const showClose = isInProgress && (
+          (!anyRoleInReview && isApplicant) ||
+          (anyRoleInReview && isSQA)
+        );
 
         return (
           <Space size="small" wrap>
