@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Card, Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  Form, DatePicker, message, Alert, Tooltip, Divider,
+  Table, Tabs, Tag, Button, Space, Modal, Input, Select,
+  message, Alert, Tooltip, Divider,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
-  CheckCircleOutlined, CloseCircleOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, UserSwitchOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -17,6 +17,7 @@ import {
 import type {
   CheckListItem, ReviewElement, ReviewStatus,
 } from '@/types';
+import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
 
 // Map team role to checklist responsibleRole
@@ -29,41 +30,29 @@ const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
 
 const { TextArea } = Input;
 
-// --- 状态标签渲染 ---
+// --- Status rendering helpers ---
 
-function renderEntryStatus(status: string) {
-  const map: Record<string, { color: string; text: string }> = {
-    not_entered: { color: 'default', text: '未录入' },
-    draft: { color: 'orange', text: '已暂存' },
-    entered: { color: 'green', text: '已录入' },
-  };
-  const s = map[status] ?? { color: 'default', text: status };
-  return <Tag color={s.color}>{s.text}</Tag>;
-}
+const ENTRY_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  not_entered: { label: '未录入', color: 'default' },
+  draft: { label: '暂存', color: 'orange' },
+  entered: { label: '已录入', color: 'green' },
+};
 
-function renderAIStatus(status: string) {
-  const map: Record<string, { color: string; text: string }> = {
-    not_started: { color: 'default', text: '-' },
-    in_progress: { color: 'blue', text: '进行中' },
-    passed: { color: 'green', text: '通过' },
-    failed: { color: 'red', text: '不通过' },
-  };
-  const s = map[status] ?? { color: 'default', text: status };
-  return <Tag color={s.color}>{s.text}</Tag>;
-}
+const AI_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  not_started: { label: '-', color: 'default' },
+  in_progress: { label: '检查中', color: 'processing' },
+  passed: { label: '通过', color: 'success' },
+  failed: { label: '不通过', color: 'error' },
+};
 
-function renderReviewStatus(status: string) {
-  const map: Record<string, { color: string; text: string }> = {
-    not_reviewed: { color: 'default', text: '未审核' },
-    reviewing: { color: 'blue', text: '审核中' },
-    passed: { color: 'green', text: '通过' },
-    rejected: { color: 'red', text: '不通过' },
-  };
-  const s = map[status] ?? { color: 'default', text: status };
-  return <Tag color={s.color}>{s.text}</Tag>;
-}
+const REVIEW_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  not_reviewed: { label: '未审核', color: 'default' },
+  reviewing: { label: '审核中', color: 'processing' },
+  passed: { label: '通过', color: 'success' },
+  rejected: { label: '不通过', color: 'error' },
+};
 
-// --- Block任务表单项 ---
+// --- Block task form ---
 interface BlockTaskForm {
   description: string;
   resolution: string;
@@ -72,7 +61,7 @@ interface BlockTaskForm {
   deadline: string;
 }
 
-// --- 遗留任务表单项 ---
+// --- Legacy task form ---
 interface LegacyTaskForm {
   responsiblePerson: string;
   department: string;
@@ -94,7 +83,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
   }, [application, currentUser.id]);
 
-  // 审核数据状态（不可变更新）- filtered by user's maintenance role
+  // State
   const [allChecklistItems, setAllChecklistItems] = useState<CheckListItem[]>(
     () => MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === id)
   );
@@ -102,50 +91,62 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     () => MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === id)
   );
 
-  // Only show items matching current user's responsible role
+  // Role-filtered views
   const checklistItems = useMemo(() => {
     if (!userResponsibleRole) return allChecklistItems;
-    return allChecklistItems.filter((i) => i.responsibleRole === userResponsibleRole);
-  }, [allChecklistItems, userResponsibleRole]);
+    return allChecklistItems.filter((i) =>
+      i.responsibleRole === userResponsibleRole
+      || i.reviewPersonId === currentUser.id
+      || i.delegatedTo?.includes(currentUser.id)
+    );
+  }, [allChecklistItems, userResponsibleRole, currentUser.id]);
 
   const reviewElements = useMemo(() => {
     if (!userResponsibleRole) return allReviewElements;
-    return allReviewElements.filter((i) => i.responsibleRole === userResponsibleRole);
-  }, [allReviewElements, userResponsibleRole]);
+    return allReviewElements.filter((i) =>
+      i.responsibleRole === userResponsibleRole
+      || i.reviewPersonId === currentUser.id
+      || i.delegatedTo?.includes(currentUser.id)
+    );
+  }, [allReviewElements, userResponsibleRole, currentUser.id]);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
 
-  // Modal状态
+  // Modals
   const [passModalOpen, setPassModalOpen] = useState(false);
   const [failModalOpen, setFailModalOpen] = useState(false);
-  const [delegateModalOpen, setDelegateModalOpen] = useState(false);
   const [wantLegacy, setWantLegacy] = useState(false);
 
-  // 不通过表单
+  // Delegate modal & delegated reviewer display
+  const [delegateModalOpen, setDelegateModalOpen] = useState(false);
+  const [delegatePersonId, setDelegatePersonId] = useState<string | undefined>(undefined);
+  const [delegatedReviewerName, setDelegatedReviewerName] = useState<string | null>(null);
+
+  // Fail form
   const [reviewComment, setReviewComment] = useState('');
   const [blockTasks, setBlockTasks] = useState<BlockTaskForm[]>([
     { description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' },
   ]);
 
-  // 遗留任务表单
+  // Legacy task form
   const [legacyTasks, setLegacyTasks] = useState<LegacyTaskForm[]>([
     { responsiblePerson: '', department: '', description: '', deadline: '' },
   ]);
 
-  // 委派
-  const [delegatePersons, setDelegatePersons] = useState<string[]>([]);
-
   if (!application) {
-    return <Card><Alert type="error" message="未找到该转维申请记录" /></Card>;
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <h2>未找到转维申请</h2>
+        <Button onClick={() => router.back()}>返回</Button>
+      </div>
+    );
   }
 
-  // 当前审核角色 - 从维护团队中获取
   const currentRole = userResponsibleRole ?? 'SPM';
   const maintenanceMember = application.team.maintenance.find((m) => m.id === currentUser.id);
-  const roleLeader = maintenanceMember;
 
-  // --- 单条通过/不通过 ---
+  // --- Single item review ---
   const handleItemReview = (itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
     if (type === 'checklist') {
       setAllChecklistItems((prev) =>
@@ -159,7 +160,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     message.success(newStatus === 'passed' ? '已通过' : '已标记为不通过');
   };
 
-  // --- 批量操作 ---
+  // --- Batch review ---
   const handleBatchReview = (newStatus: ReviewStatus) => {
     if (activeTab === 'checklist') {
       setAllChecklistItems((prev) =>
@@ -178,7 +179,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
   };
 
-  // --- 全部通过 ---
+  // --- Pass confirm ---
   const handlePassConfirm = () => {
     if (wantLegacy) {
       const hasEmpty = legacyTasks.some(
@@ -195,7 +196,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setLegacyTasks([{ responsiblePerson: '', department: '', description: '', deadline: '' }]);
   };
 
-  // --- 全部不通过 ---
+  // --- Fail confirm ---
   const handleFailConfirm = () => {
     if (!reviewComment.trim()) {
       message.warning('请填写评审意见');
@@ -214,7 +215,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setBlockTasks([{ description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' }]);
   };
 
-  // --- Block任务动态操作 ---
+  // --- Block task CRUD ---
   const addBlockTask = () => {
     setBlockTasks((prev) => [
       ...prev,
@@ -230,7 +231,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   };
 
-  // --- 遗留任务动态操作 ---
+  // --- Legacy task CRUD ---
   const addLegacyTask = () => {
     setLegacyTasks((prev) => [
       ...prev,
@@ -246,112 +247,189 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   };
 
-  // --- 表格列定义 ---
-  const checklistColumns = [
-    { title: '序号', dataIndex: 'seq', key: 'seq', width: 60 },
+  // --- Delegate: assign all review items of current role to another person ---
+  const openDelegateModal = () => {
+    setDelegatePersonId(undefined);
+    setDelegateModalOpen(true);
+  };
+
+  const handleDelegateConfirm = () => {
+    if (!delegatePersonId) {
+      message.warning('请选择委派人员');
+      return;
+    }
+    const targetUser = MOCK_USERS.find((u) => u.id === delegatePersonId);
+    if (!targetUser) return;
+
+    const isMyItem = (item: CheckListItem | ReviewElement) =>
+      item.responsibleRole === userResponsibleRole
+      || item.reviewPersonId === currentUser.id;
+
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!isMyItem(item)) return item;
+      return {
+        ...item,
+        reviewPerson: targetUser.name,
+        reviewPersonId: targetUser.id,
+        delegatedTo: [...new Set([...(item.delegatedTo ?? []), targetUser.id])],
+      };
+    };
+
+    setAllChecklistItems((prev) => prev.map(updateItem));
+    setAllReviewElements((prev) => prev.map(updateItem));
+    setDelegatedReviewerName(targetUser.name);
+
+    setDelegateModalOpen(false);
+    setDelegatePersonId(undefined);
+    message.success(`已将${currentRole}角色的审核任务委派给 ${targetUser.name}`);
+  };
+
+  // --- User options for selectors ---
+  const userOptions = MOCK_USERS.map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id }));
+
+  // --- Checklist columns ---
+  const checklistColumns: ColumnsType<CheckListItem> = [
+    { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
     { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
     {
-      title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 250,
-      render: (text: string) => (
-        <Tooltip title={text}><span style={{ display: 'block', maxWidth: 230, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span></Tooltip>
+      title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 260,
+      ellipsis: { showTitle: false },
+      render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+    },
+    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
+    { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
+    {
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
+      render: (text: string, record: CheckListItem) => (
+        <Space size={4}>
+          <span>{text}</span>
+          {record.delegatedTo && record.delegatedTo.length > 0 && (
+            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+          )}
+        </Space>
       ),
     },
-    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80 },
-    { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 120 },
-    { title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 120 },
     {
-      title: '交付件', dataIndex: 'deliverables', key: 'deliverables', width: 120,
-      render: (deliverables: CheckListItem['deliverables']) =>
-        deliverables.length > 0
-          ? deliverables.map((d) => <a key={d.id} style={{ marginRight: 4 }}>{d.name}</a>)
-          : '-',
+      title: '交付件', key: 'deliverables', width: 120,
+      render: (_: unknown, record: CheckListItem) =>
+        record.deliverables.length > 0
+          ? record.deliverables.map((d) => (
+              <a key={d.id} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, display: 'block' }}>
+                {d.name}
+              </a>
+            ))
+          : <span style={{ color: '#999' }}>-</span>,
     },
     {
-      title: '录入状态', dataIndex: 'entryStatus', key: 'entryStatus', width: 90,
-      render: renderEntryStatus,
+      title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      render: (_: unknown, record: CheckListItem) => {
+        const s = ENTRY_STATUS_MAP[record.entryStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.entryStatus}</Tag>;
+      },
     },
     {
-      title: 'AI检查状态', dataIndex: 'aiCheckStatus', key: 'aiCheckStatus', width: 100,
-      render: renderAIStatus,
+      title: 'AI检查', key: 'aiCheckStatus', width: 90, align: 'center',
+      render: (_: unknown, record: CheckListItem) => {
+        const s = AI_STATUS_MAP[record.aiCheckStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.aiCheckStatus}</Tag>;
+      },
     },
     {
-      title: '维护审核状态', dataIndex: 'reviewStatus', key: 'reviewStatus', width: 110,
-      render: renderReviewStatus,
+      title: '审核状态', key: 'reviewStatus', width: 100, align: 'center',
+      render: (_: unknown, record: CheckListItem) => {
+        const s = REVIEW_STATUS_MAP[record.reviewStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.reviewStatus}</Tag>;
+      },
     },
     {
-      title: '操作', key: 'action', width: 140, fixed: 'right' as const,
+      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
       render: (_: unknown, record: CheckListItem) => (
-        <Space size="small">
-          <Button
-            type="link" size="small"
-            icon={<CheckCircleOutlined />}
+        <Space size={4}>
+          <Button type="link" size="small" icon={<CheckCircleOutlined />}
             style={{ color: '#52c41a' }}
-            onClick={() => handleItemReview(record.id, 'checklist', 'passed')}
-          >
+            onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
             通过
           </Button>
-          <Button
-            type="link" size="small" danger
-            icon={<CloseCircleOutlined />}
-            onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}
-          >
-            不通过
+          <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+            onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
+            拒绝
           </Button>
         </Space>
       ),
     },
   ];
 
-  const reviewElementColumns = [
-    { title: '序号', dataIndex: 'seq', key: 'seq', width: 60 },
+  // --- Review element columns ---
+  const reviewElementColumns: ColumnsType<ReviewElement> = [
+    { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
     { title: '标准', dataIndex: 'standard', key: 'standard', width: 100 },
     {
-      title: '说明', dataIndex: 'description', key: 'description', width: 200,
-      render: (text: string) => (
-        <Tooltip title={text}><span style={{ display: 'block', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span></Tooltip>
+      title: '说明', dataIndex: 'description', key: 'description', width: 220,
+      ellipsis: { showTitle: false },
+      render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+    },
+    {
+      title: '备注', dataIndex: 'remark', key: 'remark', width: 140,
+      ellipsis: { showTitle: false },
+      render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+    },
+    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
+    { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
+    {
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
+      render: (text: string, record: ReviewElement) => (
+        <Space size={4}>
+          <span>{text}</span>
+          {record.delegatedTo && record.delegatedTo.length > 0 && (
+            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+          )}
+        </Space>
       ),
     },
-    { title: '备注', dataIndex: 'remark', key: 'remark', width: 120 },
-    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80 },
-    { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 120 },
-    { title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 120 },
     {
-      title: '交付件', dataIndex: 'deliverables', key: 'deliverables', width: 120,
-      render: (deliverables: ReviewElement['deliverables']) =>
-        deliverables.length > 0
-          ? deliverables.map((d) => <a key={d.id} style={{ marginRight: 4 }}>{d.name}</a>)
-          : '-',
+      title: '交付件', key: 'deliverables', width: 120,
+      render: (_: unknown, record: ReviewElement) =>
+        record.deliverables.length > 0
+          ? record.deliverables.map((d) => (
+              <a key={d.id} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, display: 'block' }}>
+                {d.name}
+              </a>
+            ))
+          : <span style={{ color: '#999' }}>-</span>,
     },
     {
-      title: '录入状态', dataIndex: 'entryStatus', key: 'entryStatus', width: 90,
-      render: renderEntryStatus,
+      title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      render: (_: unknown, record: ReviewElement) => {
+        const s = ENTRY_STATUS_MAP[record.entryStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.entryStatus}</Tag>;
+      },
     },
     {
-      title: 'AI检查状态', dataIndex: 'aiCheckStatus', key: 'aiCheckStatus', width: 100,
-      render: renderAIStatus,
+      title: 'AI检查', key: 'aiCheckStatus', width: 90, align: 'center',
+      render: (_: unknown, record: ReviewElement) => {
+        const s = AI_STATUS_MAP[record.aiCheckStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.aiCheckStatus}</Tag>;
+      },
     },
     {
-      title: '维护审核状态', dataIndex: 'reviewStatus', key: 'reviewStatus', width: 110,
-      render: renderReviewStatus,
+      title: '审核状态', key: 'reviewStatus', width: 100, align: 'center',
+      render: (_: unknown, record: ReviewElement) => {
+        const s = REVIEW_STATUS_MAP[record.reviewStatus];
+        return <Tag color={s?.color}>{s?.label ?? record.reviewStatus}</Tag>;
+      },
     },
     {
-      title: '操作', key: 'action', width: 140, fixed: 'right' as const,
+      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
       render: (_: unknown, record: ReviewElement) => (
-        <Space size="small">
-          <Button
-            type="link" size="small"
-            icon={<CheckCircleOutlined />}
+        <Space size={4}>
+          <Button type="link" size="small" icon={<CheckCircleOutlined />}
             style={{ color: '#52c41a' }}
-            onClick={() => handleItemReview(record.id, 'review_element', 'passed')}
-          >
+            onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
             通过
           </Button>
-          <Button
-            type="link" size="small" danger
-            icon={<CloseCircleOutlined />}
-            onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}
-          >
-            不通过
+          <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+            onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
+            拒绝
           </Button>
         </Space>
       ),
@@ -363,103 +441,123 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
   };
 
-  const userOptions = MOCK_USERS.map((u) => ({ label: `${u.name} (${u.department})`, value: u.id }));
+  const currentTab = activeTab as 'checklist' | 'review_element';
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* 返回按钮 */}
-      <Button
-        icon={<ArrowLeftOutlined />}
-        style={{ marginBottom: 16 }}
-        onClick={() => router.push(`/workbench/${id}`)}
-      >
-        返回详情
-      </Button>
+    <div style={{ padding: '16px 24px', background: '#f5f5f5', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>
+          返回
+        </Button>
+        <h2 style={{ margin: 0 }}>维护审核</h2>
+        <span style={{ color: '#888', fontSize: 14 }}>{application.projectName}</span>
+        {userResponsibleRole && (
+          <Tag color="blue" style={{ marginLeft: 8, fontSize: 13 }}>
+            {currentRole}角色
+          </Tag>
+        )}
+      </div>
 
-      {/* 流水线进度 */}
-      <Card style={{ marginBottom: 16 }}>
+      {/* Pipeline */}
+      <div style={{ background: '#fff', borderRadius: 8, padding: '8px 24px', marginBottom: 16 }}>
         <PipelineProgress pipeline={application.pipeline} />
-      </Card>
+      </div>
 
-      {/* 固定顶部审核操作栏 */}
-      <Card
-        style={{
-          marginBottom: 16,
-          position: 'sticky',
-          top: 64,
-          zIndex: 10,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontWeight: 600, fontSize: 16 }}>
-              评审角色：<Tag color="blue">{currentRole}</Tag>
-            </span>
-            <span>负责人：{roleLeader?.name ?? '-'}</span>
-            <Button size="small" onClick={() => setDelegateModalOpen(true)}>委派</Button>
-          </div>
-          <Space>
-            {selectedRowKeys.length > 0 && (
-              <>
-                <Button onClick={() => handleBatchReview('passed')} style={{ color: '#52c41a', borderColor: '#52c41a' }}>
-                  批量通过 ({selectedRowKeys.length})
-                </Button>
-                <Button danger onClick={() => handleBatchReview('rejected')}>
-                  批量不通过 ({selectedRowKeys.length})
-                </Button>
-                <Divider type="vertical" />
-              </>
+      {/* Sticky review action bar */}
+      <div style={{
+        background: '#fff',
+        borderRadius: 8,
+        padding: '12px 20px',
+        marginBottom: 16,
+        position: 'sticky',
+        top: 56,
+        zIndex: 10,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        border: '1px solid #f0f0f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ fontWeight: 600, fontSize: 15 }}>
+            评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
+          </span>
+          <span style={{ color: '#666', fontSize: 13 }}>
+            负责人：{delegatedReviewerName ?? maintenanceMember?.name ?? '-'}
+            {delegatedReviewerName && (
+              <Tag color="purple" style={{ fontSize: 11, marginLeft: 6 }}>已委派</Tag>
             )}
-            <Button danger onClick={() => setFailModalOpen(true)}>不通过</Button>
-            <Button type="primary" style={{ background: '#52c41a', borderColor: '#52c41a' }} onClick={() => setPassModalOpen(true)}>
-              通过
-            </Button>
-          </Space>
+          </span>
         </div>
-      </Card>
+        <Space size={8}>
+          {selectedRowKeys.length > 0 && (
+            <>
+              <Button size="small" onClick={() => handleBatchReview('passed')}
+                style={{ color: '#52c41a', borderColor: '#b7eb8f' }}>
+                批量通过 ({selectedRowKeys.length})
+              </Button>
+              <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
+                批量不通过 ({selectedRowKeys.length})
+              </Button>
+              <Divider type="vertical" />
+            </>
+          )}
+          <Button icon={<UserSwitchOutlined />} onClick={openDelegateModal}>
+            委派
+          </Button>
+          <Divider type="vertical" />
+          <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
+            不通过
+          </Button>
+          <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
+            style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+            通过
+          </Button>
+        </Space>
+      </div>
 
-      {/* Tab切换 */}
-      <Card>
+      {/* Main content */}
+      <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
         <Tabs
           activeKey={activeTab}
           onChange={(key) => { setActiveTab(key); setSelectedRowKeys([]); }}
           items={[
             {
               key: 'checklist',
-              label: '转维材料',
+              label: `转维材料 (${checklistItems.length})`,
               children: (
-                <Table
+                <Table<CheckListItem>
                   rowKey="id"
                   columns={checklistColumns}
                   dataSource={checklistItems}
                   rowSelection={rowSelection}
-                  scroll={{ x: 1400 }}
-                  pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
-                  size="small"
+                  scroll={{ x: 1600 }}
+                  pagination={false}
+                  size="middle"
                 />
               ),
             },
             {
               key: 'review_element',
-              label: '评审要素',
+              label: `评审要素 (${reviewElements.length})`,
               children: (
-                <Table
+                <Table<ReviewElement>
                   rowKey="id"
                   columns={reviewElementColumns}
                   dataSource={reviewElements}
                   rowSelection={rowSelection}
-                  scroll={{ x: 1500 }}
-                  pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
-                  size="small"
+                  scroll={{ x: 1700 }}
+                  pagination={false}
+                  size="middle"
                 />
               ),
             },
           ]}
         />
-      </Card>
+      </div>
 
-      {/* ===== 通过Modal ===== */}
+      {/* Pass Modal */}
       <Modal
         title="确认审核通过"
         open={passModalOpen}
@@ -468,64 +566,61 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         okText="确认通过"
         cancelText="取消"
         width={700}
+        destroyOnClose
       >
         {!wantLegacy ? (
-          <div>
-            <p>是否需要创建遗留任务？</p>
-            <Space>
-              <Button onClick={handlePassConfirm}>否，直接通过</Button>
-              <Button type="primary" onClick={() => setWantLegacy(true)}>是，创建遗留任务</Button>
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <p style={{ fontSize: 15, marginBottom: 20 }}>是否需要创建遗留任务？</p>
+            <Space size={16}>
+              <Button size="large" onClick={handlePassConfirm}>
+                否，直接通过
+              </Button>
+              <Button size="large" type="primary" onClick={() => setWantLegacy(true)}>
+                是，创建遗留任务
+              </Button>
             </Space>
           </div>
         ) : (
           <div>
-            <h4>创建遗留任务</h4>
-            <p style={{ color: '#999', marginBottom: 16 }}>可为该检查项添加一个或多个遗留任务</p>
+            <div style={{ marginBottom: 16 }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>创建遗留任务</span>
+              <span style={{ color: '#999', fontSize: 13, marginLeft: 8 }}>可添加一个或多个遗留任务</span>
+            </div>
             {legacyTasks.map((task, index) => (
-              <Card key={index} size="small" style={{ marginBottom: 12 }}
-                extra={legacyTasks.length > 1 && (
-                  <Button type="link" danger icon={<DeleteOutlined />} onClick={() => removeLegacyTask(index)} />
-                )}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div key={index} style={{
+                border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, marginBottom: 12,
+                background: '#fafafa',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <span style={{ fontWeight: 500, color: '#333' }}>遗留任务 {index + 1}</span>
+                  {legacyTasks.length > 1 && (
+                    <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeLegacyTask(index)} />
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                   <div>
-                    <label>责任人 *</label>
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="选择责任人"
-                      options={userOptions}
+                    <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>责任人 *</div>
+                    <Select style={{ width: '100%' }} placeholder="选择责任人" options={userOptions}
                       value={task.responsiblePerson || undefined}
-                      onChange={(v) => updateLegacyTask(index, 'responsiblePerson', v)}
-                    />
+                      onChange={(v) => updateLegacyTask(index, 'responsiblePerson', v)} />
                   </div>
                   <div>
-                    <label>部门 *</label>
-                    <Input
-                      placeholder="输入部门"
-                      value={task.department}
-                      onChange={(e) => updateLegacyTask(index, 'department', e.target.value)}
-                    />
+                    <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>部门 *</div>
+                    <Input placeholder="输入部门" value={task.department}
+                      onChange={(e) => updateLegacyTask(index, 'department', e.target.value)} />
                   </div>
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <label>问题描述 *</label>
-                  <TextArea
-                    rows={2}
-                    placeholder="描述遗留问题"
-                    value={task.description}
-                    onChange={(e) => updateLegacyTask(index, 'description', e.target.value)}
-                  />
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>问题描述 *</div>
+                  <TextArea rows={2} placeholder="描述遗留问题" value={task.description}
+                    onChange={(e) => updateLegacyTask(index, 'description', e.target.value)} />
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <label>完成时间 *</label>
-                  <Input
-                    type="date"
-                    value={task.deadline}
-                    onChange={(e) => updateLegacyTask(index, 'deadline', e.target.value)}
-                    style={{ width: '100%' }}
-                  />
+                <div>
+                  <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>完成时间 *</div>
+                  <Input type="date" value={task.deadline} style={{ width: '100%' }}
+                    onChange={(e) => updateLegacyTask(index, 'deadline', e.target.value)} />
                 </div>
-              </Card>
+              </div>
             ))}
             <Button type="dashed" block icon={<PlusOutlined />} onClick={addLegacyTask}>
               新增任务行
@@ -534,7 +629,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         )}
       </Modal>
 
-      {/* ===== 不通过Modal ===== */}
+      {/* Fail Modal */}
       <Modal
         title="创建 Block 任务"
         open={failModalOpen}
@@ -543,106 +638,88 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         okText="确认并保存"
         cancelText="取消"
         width={750}
+        destroyOnClose
       >
-        <p style={{ color: '#999' }}>若检查项未通过，可添加一个或多个 Block 任务以便跟踪整改。</p>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontWeight: 600 }}>评审意见 *</label>
-          <TextArea
-            rows={3}
-            placeholder="请填写评审意见"
-            value={reviewComment}
-            onChange={(e) => setReviewComment(e.target.value)}
-            style={{ marginTop: 4 }}
-          />
+        <p style={{ color: '#999', marginBottom: 16 }}>若检查项未通过，可添加一个或多个 Block 任务以便跟踪整改。</p>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 4, fontWeight: 600 }}>评审意见 *</div>
+          <TextArea rows={3} placeholder="请填写评审意见" value={reviewComment}
+            onChange={(e) => setReviewComment(e.target.value)} />
         </div>
-
         {blockTasks.map((task, index) => (
-          <Card key={index} size="small" style={{ marginBottom: 12 }}
-            title={`Block 任务 ${index + 1}`}
-            extra={blockTasks.length > 1 && (
-              <Button type="link" danger icon={<DeleteOutlined />} onClick={() => removeBlockTask(index)} />
-            )}
-          >
-            <div style={{ marginBottom: 8 }}>
-              <label>Block 点描述 *</label>
-              <TextArea
-                rows={2}
-                placeholder="描述Block点"
-                value={task.description}
-                onChange={(e) => updateBlockTask(index, 'description', e.target.value)}
-              />
+          <div key={index} style={{
+            border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, marginBottom: 12,
+            background: '#fafafa',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontWeight: 500, color: '#333' }}>Block 任务 {index + 1}</span>
+              {blockTasks.length > 1 && (
+                <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => removeBlockTask(index)} />
+              )}
             </div>
-            <div style={{ marginBottom: 8 }}>
-              <label>解除措施 *</label>
-              <TextArea
-                rows={2}
-                placeholder="描述解除措施"
-                value={task.resolution}
-                onChange={(e) => updateBlockTask(index, 'resolution', e.target.value)}
-              />
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>Block 点描述 *</div>
+              <TextArea rows={2} placeholder="描述Block点" value={task.description}
+                onChange={(e) => updateBlockTask(index, 'description', e.target.value)} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>解除措施 *</div>
+              <TextArea rows={2} placeholder="描述解除措施" value={task.resolution}
+                onChange={(e) => updateBlockTask(index, 'resolution', e.target.value)} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <div>
-                <label>责任人 *</label>
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder="选择责任人"
-                  options={userOptions}
+                <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>责任人 *</div>
+                <Select style={{ width: '100%' }} placeholder="选择责任人" options={userOptions}
                   value={task.responsiblePerson || undefined}
-                  onChange={(v) => updateBlockTask(index, 'responsiblePerson', v)}
-                />
+                  onChange={(v) => updateBlockTask(index, 'responsiblePerson', v)} />
               </div>
               <div>
-                <label>部门 *</label>
-                <Input
-                  placeholder="输入部门"
-                  value={task.department}
-                  onChange={(e) => updateBlockTask(index, 'department', e.target.value)}
-                />
+                <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>部门 *</div>
+                <Input placeholder="输入部门" value={task.department}
+                  onChange={(e) => updateBlockTask(index, 'department', e.target.value)} />
               </div>
             </div>
-            <div style={{ marginTop: 8 }}>
-              <label>完成时间 *</label>
-              <Input
-                type="date"
-                value={task.deadline}
-                onChange={(e) => updateBlockTask(index, 'deadline', e.target.value)}
-                style={{ width: '100%' }}
-              />
+            <div>
+              <div style={{ marginBottom: 4, fontSize: 13, color: '#666' }}>完成时间 *</div>
+              <Input type="date" value={task.deadline} style={{ width: '100%' }}
+                onChange={(e) => updateBlockTask(index, 'deadline', e.target.value)} />
             </div>
-          </Card>
+          </div>
         ))}
         <Button type="dashed" block icon={<PlusOutlined />} onClick={addBlockTask}>
           新增 Block 行
         </Button>
       </Modal>
 
-      {/* ===== 委派Modal ===== */}
+      {/* Delegate Modal */}
       <Modal
-        title="委派协作人"
+        title="委派审核任务"
         open={delegateModalOpen}
-        onCancel={() => setDelegateModalOpen(false)}
-        onOk={() => {
-          if (delegatePersons.length === 0) {
-            message.warning('请选择至少一个协作人');
-            return;
-          }
-          message.success(`已委派 ${delegatePersons.length} 人`);
+        onCancel={() => {
           setDelegateModalOpen(false);
-          setDelegatePersons([]);
+          setDelegatePersonId(undefined);
         }}
-        okText="确认"
+        onOk={handleDelegateConfirm}
+        okText="确认委派"
         cancelText="取消"
+        width={500}
+        destroyOnClose
       >
-        <p>选择协作人参与审核：</p>
+        <div style={{ marginBottom: 16, color: '#666' }}>
+          将 <Tag color="blue">{currentRole}</Tag> 角色的所有审核任务委派给其他人员，委派后该人员将成为新的审核责任人。
+        </div>
         <Select
-          mode="multiple"
           style={{ width: '100%' }}
-          placeholder="选择人员"
-          options={userOptions}
-          value={delegatePersons}
-          onChange={setDelegatePersons}
+          placeholder="选择委派人员"
+          value={delegatePersonId}
+          onChange={setDelegatePersonId}
+          options={MOCK_USERS.filter((u) => u.id !== currentUser.id).map((u) => ({
+            value: u.id,
+            label: `${u.name} (${u.role} - ${u.department})`,
+          }))}
+          optionFilterProp="label"
+          showSearch
         />
       </Modal>
     </div>

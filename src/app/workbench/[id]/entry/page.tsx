@@ -57,13 +57,13 @@ const REVIEW_STATUS_MAP: Record<ReviewStatus, { label: string; color: string }> 
 function renderDeliverables(deliverables: ReadonlyArray<{ name: string; url: string }>) {
   if (deliverables.length === 0) return <span style={{ color: '#999' }}>-</span>;
   return (
-    <Space direction="vertical" size={0}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {deliverables.map((d) => (
         <a key={d.name} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
           {d.name}
         </a>
       ))}
-    </Space>
+    </div>
   );
 }
 
@@ -96,21 +96,33 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     () => MOCK_REVIEW_ELEMENTS.filter((item) => item.applicationId === id),
   );
 
-  // Show items matching current user's role OR delegated to current user
+  // Show items matching current user's role OR entryPersonId OR delegatedTo
+  // If user has no research role, only show items where they are entryPerson or delegated
   const roleFilteredChecklist = useMemo(() => {
-    if (!userResponsibleRole) return checklistItems;
+    if (userResponsibleRole) {
+      return checklistItems.filter((item) =>
+        item.responsibleRole === userResponsibleRole
+        || item.entryPersonId === currentUser.id
+        || item.delegatedTo?.includes(currentUser.id)
+      );
+    }
+    // No research role (e.g. delegated user from maintenance team)
     return checklistItems.filter((item) =>
-      item.responsibleRole === userResponsibleRole
-      || item.entryPersonId === currentUser.id
+      item.entryPersonId === currentUser.id
       || item.delegatedTo?.includes(currentUser.id)
     );
   }, [checklistItems, userResponsibleRole, currentUser.id]);
 
   const roleFilteredReviewElements = useMemo(() => {
-    if (!userResponsibleRole) return reviewElements;
+    if (userResponsibleRole) {
+      return reviewElements.filter((item) =>
+        item.responsibleRole === userResponsibleRole
+        || item.entryPersonId === currentUser.id
+        || item.delegatedTo?.includes(currentUser.id)
+      );
+    }
     return reviewElements.filter((item) =>
-      item.responsibleRole === userResponsibleRole
-      || item.entryPersonId === currentUser.id
+      item.entryPersonId === currentUser.id
       || item.delegatedTo?.includes(currentUser.id)
     );
   }, [reviewElements, userResponsibleRole, currentUser.id]);
@@ -519,7 +531,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message="维护审核不通过，存在未解决的Block任务"
+          title="维护审核不通过，存在未解决的Block任务"
           description={
             <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
               {blockTasks.map((bt) => (
@@ -564,11 +576,13 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           </Space>
 
           <Space size={8}>
-            <Tooltip title={canSubmitReview ? '所有录入项已通过AI检查，可以提交审核' : '需要所有录入项的录入状态和AI检查都通过后才能提交'}>
-              <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
-                提交审核
-              </Button>
-            </Tooltip>
+            {userResponsibleRole && (
+              <Tooltip title={canSubmitReview ? '所有录入项已通过AI检查，可以提交审核' : '需要所有录入项的录入状态和AI检查都通过后才能提交'}>
+                <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
+                  提交审核
+                </Button>
+              </Tooltip>
+            )}
             {selectedKeys.length > 0 && (
               <Button onClick={() => openDelegateModal(selectedKeys as string[], currentTab)}>
                 全部委派 ({selectedKeys.length})

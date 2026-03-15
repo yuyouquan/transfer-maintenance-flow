@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Card, Button, Breadcrumb, Space, Tag } from 'antd';
+import { Card, Button, Breadcrumb, Tag } from 'antd';
 import {
   FileTextOutlined,
   AuditOutlined,
@@ -60,7 +60,7 @@ export default function ConfigPage() {
             style={{ width: 380, borderRadius: 8 }}
             styles={{ body: { padding: 24 } }}
           >
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 {card.icon}
                 <div>
@@ -85,7 +85,7 @@ export default function ConfigPage() {
               >
                 管理
               </Button>
-            </Space>
+            </div>
           </Card>
         ))}
       </div>

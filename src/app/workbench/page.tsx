@@ -3,51 +3,29 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Table,
-  Input,
-  Button,
-  Tag,
-  Space,
-  Modal,
-  Card,
-  Typography,
-  Badge,
-  message,
+  Table, Input, Button, Tag, Space, Modal, Card, Typography, Badge, message, Segmented, Progress,
 } from 'antd';
 import {
-  PlusOutlined,
-  SearchOutlined,
-  FileTextOutlined,
-  EditOutlined,
-  AuditOutlined,
-  CloseCircleOutlined,
-  RightOutlined,
-  LeftOutlined,
-  CarryOutOutlined,
+  PlusOutlined, SearchOutlined, FileTextOutlined, EditOutlined,
+  AuditOutlined, CloseCircleOutlined, RightOutlined, LeftOutlined,
+  CarryOutOutlined, ProjectOutlined, SyncOutlined, CheckCircleOutlined,
+  StopOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type {
-  TransferApplication,
-  TodoItem,
-  PipelineStatus,
-  PipelineNodeStatus,
-  CloseReviewRow,
+  TransferApplication, TodoItem, PipelineStatus, PipelineNodeStatus, CloseReviewRow,
 } from '@/types';
 import { MOCK_APPLICATIONS, MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
 import { useCurrentUser } from '@/context/UserContext';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { TextArea } = Input;
 
 // --- Constants ---
 
 const PAGE_SIZE = 10;
 
-const PIPELINE_STATUS_CONFIG: Record<PipelineStatus, { color: string; label: string }> = {
-  in_progress: { color: 'processing', label: '进行中' },
-  completed: { color: 'success', label: '已完成' },
-  cancelled: { color: 'default', label: '已关闭' },
-};
+const PIPELINE_NODES = ['项目发起', '资料录入与AI检查', '维护审核', '信息变更'] as const;
 
 const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: string }> = {
   not_started: { color: 'default', label: '未开始' },
@@ -56,20 +34,29 @@ const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: str
   failed: { color: 'error', label: '失败' },
 };
 
-const TODO_TYPE_CONFIG: Record<string, { color: string; label: string }> = {
-  entry: { color: '#1677ff', label: '录入' },
-  review: { color: '#52c41a', label: '评审' },
+const TODO_TYPE_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
+  entry: { color: '#1677ff', label: '录入', icon: <EditOutlined /> },
+  review: { color: '#52c41a', label: '评审', icon: <AuditOutlined /> },
 };
+
+const ROLE_DISPLAY_MAP: Record<string, string> = {
+  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统',
+};
+
+type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled';
 
 // --- Helpers ---
 
-const getCurrentNodeLabel = (app: TransferApplication): string => {
+const getCurrentNodeIndex = (app: TransferApplication): number => {
   const { pipeline } = app;
-  if (pipeline.infoChange === 'in_progress' || pipeline.infoChange === 'success') return '信息变更';
-  if (pipeline.maintenanceReview === 'in_progress' || pipeline.maintenanceReview === 'success') return '维护审核';
-  if (pipeline.dataEntry === 'in_progress' || pipeline.dataEntry === 'success') return '资料录入与AI检查';
-  if (pipeline.projectInit === 'in_progress' || pipeline.projectInit === 'success') return '项目发起';
-  return '未开始';
+  if (pipeline.infoChange !== 'not_started') return 3;
+  if (pipeline.maintenanceReview !== 'not_started') return 2;
+  if (pipeline.dataEntry !== 'not_started') return 1;
+  return 0;
+};
+
+const getCurrentNodeLabel = (app: TransferApplication): string => {
+  return PIPELINE_NODES[getCurrentNodeIndex(app)];
 };
 
 const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
@@ -80,34 +67,29 @@ const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
   return pipeline.projectInit;
 };
 
+const getPipelinePercent = (app: TransferApplication): number => {
+  const idx = getCurrentNodeIndex(app);
+  const status = getCurrentNodeStatus(app);
+  const basePercent = (idx / 4) * 100;
+  const stepPercent = status === 'success' ? 25 : status === 'in_progress' ? 12.5 : 0;
+  return Math.min(basePercent + stepPercent, 100);
+};
+
 const hasAnyRoleEnteredReview = (app: TransferApplication): boolean => {
   return app.pipeline.roleProgress.some(
     (rp) => rp.reviewStatus === 'completed' || rp.reviewStatus === 'in_progress'
   );
 };
 
-const ROLE_DISPLAY_MAP: Record<string, string> = {
-  SPM: 'SPM',
-  '测试': 'TPM',
-  '底软': '底软',
-  '系统': '系统',
-};
-
 const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseReviewRow> => {
   const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail'> = {
-    not_started: 'N/A',
-    in_progress: 'N/A',
-    completed: 'PASS',
-    rejected: 'Fail',
+    not_started: 'N/A', in_progress: 'N/A', completed: 'PASS', rejected: 'Fail',
   };
 
-  // 4 pipeline roles → maintenance team responsible persons
   const rows: CloseReviewRow[] = app.pipeline.roleProgress.map((rp) => {
     const maintenanceMember = app.team.maintenance.find(
       (m) => m.role === rp.role || (rp.role === '测试' && m.role === 'TPM')
     );
-
-    // For rejected items, find the review comment from checklist/review elements
     let comment = 'N/A';
     if (rp.reviewStatus === 'rejected') {
       const rejectedItem = [
@@ -116,7 +98,6 @@ const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseRevi
       ].find((i) => i.reviewStatus === 'rejected' && i.reviewComment);
       comment = rejectedItem?.reviewComment ?? '审核不通过';
     }
-
     return {
       role: (ROLE_DISPLAY_MAP[rp.role] ?? rp.role) as CloseReviewRow['role'],
       responsiblePerson: maintenanceMember?.name ?? '-',
@@ -125,7 +106,6 @@ const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseRevi
     };
   });
 
-  // Add SQA row - responsible person is research team SQA
   const sqaMember = app.team.research.find((m) => m.role === 'SQA');
   rows.push({
     role: 'SQA' as CloseReviewRow['role'],
@@ -137,6 +117,79 @@ const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseRevi
   return rows;
 };
 
+// --- Stat Card ---
+
+interface StatCardProps {
+  readonly title: string;
+  readonly count: number;
+  readonly icon: React.ReactNode;
+  readonly color: string;
+  readonly bgColor: string;
+  readonly active?: boolean;
+  readonly onClick?: () => void;
+}
+
+function StatCard({ title, count, icon, color, bgColor, active, onClick }: StatCardProps) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flex: 1,
+        background: active ? bgColor : '#fff',
+        borderRadius: 12,
+        padding: '20px 24px',
+        cursor: onClick ? 'pointer' : 'default',
+        border: active ? `2px solid ${color}` : '1px solid #f0f0f0',
+        transition: 'all 0.2s',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+      }}
+    >
+      <div style={{
+        width: 48, height: 48, borderRadius: 12,
+        background: bgColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, color,
+      }}>
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: '#1a1a2e', lineHeight: 1.1 }}>{count}</div>
+        <div style={{ fontSize: 13, color: '#8c8c8c', marginTop: 2 }}>{title}</div>
+      </div>
+    </div>
+  );
+}
+
+// --- Mini Pipeline ---
+
+function MiniPipeline({ app }: { readonly app: TransferApplication }) {
+  const currentIdx = getCurrentNodeIndex(app);
+  const status = getCurrentNodeStatus(app);
+  const percent = getPipelinePercent(app);
+  const strokeColor = status === 'success' ? '#52c41a' : status === 'failed' ? '#ff4d4f' : '#1677ff';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
+      <Progress
+        percent={percent}
+        size="small"
+        strokeColor={strokeColor}
+        railColor="#f0f0f0"
+        showInfo={false}
+        style={{ flex: 1, margin: 0 }}
+      />
+      <Tag
+        color={NODE_STATUS_CONFIG[status].color}
+        style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}
+      >
+        {PIPELINE_NODES[currentIdx]}
+      </Tag>
+    </div>
+  );
+}
+
 // --- Component ---
 
 export default function WorkbenchPage() {
@@ -146,19 +199,32 @@ export default function WorkbenchPage() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [todoCollapsed, setTodoCollapsed] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // Close pipeline modal
   const [closeModalVisible, setCloseModalVisible] = useState(false);
   const [closeTargetApp, setCloseTargetApp] = useState<TransferApplication | null>(null);
   const [closeReason, setCloseReason] = useState('');
 
+  // Stats
+  const stats = useMemo(() => ({
+    total: MOCK_APPLICATIONS.length,
+    inProgress: MOCK_APPLICATIONS.filter((a) => a.status === 'in_progress').length,
+    completed: MOCK_APPLICATIONS.filter((a) => a.status === 'completed').length,
+    cancelled: MOCK_APPLICATIONS.filter((a) => a.status === 'cancelled').length,
+  }), []);
+
   const filteredApplications = useMemo(() => {
-    if (!searchKeyword.trim()) return MOCK_APPLICATIONS;
-    const keyword = searchKeyword.trim().toLowerCase();
-    return MOCK_APPLICATIONS.filter((app) =>
-      app.projectName.toLowerCase().includes(keyword)
-    );
-  }, [searchKeyword]);
+    let list = MOCK_APPLICATIONS;
+    if (statusFilter !== 'all') {
+      list = list.filter((app) => app.status === statusFilter);
+    }
+    if (searchKeyword.trim()) {
+      const keyword = searchKeyword.trim().toLowerCase();
+      list = list.filter((app) => app.projectName.toLowerCase().includes(keyword));
+    }
+    return list;
+  }, [searchKeyword, statusFilter]);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -175,8 +241,9 @@ export default function WorkbenchPage() {
     setCurrentPage(1);
   }, []);
 
-  const handlePageChange = useCallback((page: number) => {
-    setCurrentPage(page);
+  const handleStatusFilter = useCallback((value: StatusFilter) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
   }, []);
 
   const handleNavigateToDetail = useCallback((id: string) => { router.push(`/workbench/${id}`); }, [router]);
@@ -209,11 +276,7 @@ export default function WorkbenchPage() {
 
   const handleTodoAction = useCallback(
     (todo: TodoItem) => {
-      if (todo.type === 'entry') {
-        router.push(`/workbench/${todo.applicationId}/entry`);
-      } else {
-        router.push(`/workbench/${todo.applicationId}/review`);
-      }
+      router.push(`/workbench/${todo.applicationId}/${todo.type === 'entry' ? 'entry' : 'review'}`);
     },
     [router]
   );
@@ -234,9 +297,7 @@ export default function WorkbenchPage() {
     {
       title: '评审意见', dataIndex: 'comment', key: 'comment', width: 200,
       render: (comment: string) => (
-        <Text type={comment === 'N/A' ? 'secondary' : undefined} style={{ fontSize: 13 }}>
-          {comment}
-        </Text>
+        <Text type={comment === 'N/A' ? 'secondary' : undefined} style={{ fontSize: 13 }}>{comment}</Text>
       ),
     },
   ];
@@ -244,81 +305,127 @@ export default function WorkbenchPage() {
   // Main table columns
   const columns: ColumnsType<TransferApplication> = [
     {
-      title: '项目名', dataIndex: 'projectName', key: 'projectName', ellipsis: true,
-      render: (text: string) => <Text strong style={{ color: '#4338ca', cursor: 'pointer' }}>{text}</Text>,
-    },
-    { title: '发起人', dataIndex: 'applicant', key: 'applicant', width: 80, align: 'center' },
-    {
-      title: '当前节点', key: 'node', width: 160,
-      render: (_: unknown, record: TransferApplication) => (
-        <Text style={{ fontSize: 13 }}>{getCurrentNodeLabel(record)}</Text>
+      title: '项目名称', dataIndex: 'projectName', key: 'projectName', width: 260,
+      render: (text: string, record: TransferApplication) => (
+        <div
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+          onClick={() => handleNavigateToDetail(record.id)}
+        >
+          <div style={{
+            width: 32, height: 32, borderRadius: 8,
+            background: record.status === 'cancelled' ? '#f5f5f5' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: record.status === 'cancelled' ? '#bbb' : '#fff',
+            fontSize: 14, fontWeight: 600, flexShrink: 0,
+          }}>
+            {text.charAt(0)}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontWeight: 600, fontSize: 13, color: record.status === 'cancelled' ? '#999' : '#1a1a2e',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {text}
+            </div>
+            <div style={{ fontSize: 11, color: '#999' }}>
+              {record.applicant} · {new Date(record.updatedAt).toLocaleDateString('zh-CN')}
+            </div>
+          </div>
+        </div>
       ),
     },
     {
-      title: '状态', key: 'nodeStatus', width: 90, align: 'center',
+      title: '流水线进度', key: 'pipeline', width: 280,
       render: (_: unknown, record: TransferApplication) => {
-        if (record.status === 'cancelled') return <Tag color="default">已关闭</Tag>;
-        const status = getCurrentNodeStatus(record);
-        const config = NODE_STATUS_CONFIG[status];
-        return <Tag color={config.color}>{config.label}</Tag>;
+        if (record.status === 'cancelled') {
+          return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>;
+        }
+        return <MiniPipeline app={record} />;
       },
     },
     {
-      title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', width: 150,
-      render: (text: string) => (
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          {new Date(text).toLocaleString('zh-CN', {
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-          })}
-        </Text>
-      ),
+      title: '角色进度', key: 'roleProgress', width: 200,
+      render: (_: unknown, record: TransferApplication) => {
+        if (record.status === 'cancelled') return <Text type="secondary">-</Text>;
+        return (
+          <Space size={4} wrap>
+            {record.pipeline.roleProgress.map((rp) => {
+              const displayRole = ROLE_DISPLAY_MAP[rp.role] ?? rp.role;
+              const isActive = rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress';
+              const isDone = rp.reviewStatus === 'completed';
+              const isFail = rp.reviewStatus === 'rejected';
+              const color = isDone ? 'success' : isFail ? 'error' : isActive ? 'processing' : 'default';
+              return (
+                <Tag key={rp.role} color={color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>
+                  {displayRole}
+                </Tag>
+              );
+            })}
+          </Space>
+        );
+      },
     },
     {
-      title: '操作', key: 'action', width: 240, fixed: 'right',
+      title: '操作', key: 'action', width: 200, fixed: 'right',
       render: (_: unknown, record: TransferApplication) => {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
-        const isSQA = record.team.research.some(
-          (m) => m.role === 'SQA' && m.id === currentUser.id
-        );
+        const isSQA = record.team.research.some((m) => m.role === 'SQA' && m.id === currentUser.id);
 
-        // 录入按钮：资料录入阶段 + 当前用户是录入责任人或角色负责人
         const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
         const hasEntryRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.entryStatus === 'completed' && rp.reviewStatus !== 'rejected') return false;
           const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
-          return record.team.research.some(
-            (m) => m.id === currentUser.id && m.role === roleMap[rp.role]
-          );
+          return record.team.research.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
         });
-        const showEntry = isInProgress && isInDataEntry && hasEntryRole;
+        const isDelegatedEntry = [
+          ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
+          ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
+        ].some((i) => i.entryPersonId === currentUser.id || i.delegatedTo?.includes(currentUser.id));
+        const showEntry = isInProgress && isInDataEntry && (hasEntryRole || isDelegatedEntry);
 
-        // 评审按钮：维护审核阶段 + 当前用户是对应角色的维护审核人
         const isInReview = record.pipeline.maintenanceReview === 'in_progress';
         const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.reviewStatus !== 'in_progress') return false;
           const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
-          return record.team.maintenance.some(
-            (m) => m.id === currentUser.id && m.role === roleMap[rp.role]
-          );
+          return record.team.maintenance.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
         });
         const showReview = isInProgress && isInReview && hasReviewRole;
 
-        // 关闭流水线按钮
         const anyRoleInReview = record.pipeline.roleProgress.some(
           (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
         );
         const showClose = isInProgress && (
-          (!anyRoleInReview && isApplicant) ||
-          (anyRoleInReview && isSQA)
+          (!anyRoleInReview && isApplicant) || (anyRoleInReview && isSQA)
         );
 
         return (
-          <Space size="small" wrap>
-            <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => handleNavigateToDetail(record.id)}>详情</Button>
-            {showEntry && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleNavigateToEntry(record.id)}>录入</Button>}
-            {showReview && <Button type="link" size="small" icon={<AuditOutlined />} onClick={() => handleNavigateToReview(record.id)}>评审</Button>}
-            {showClose && <Button type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleOpenCloseModal(record)}>关闭流水线</Button>}
+          <Space size={4}>
+            <Button type="text" size="small" icon={<FileTextOutlined />}
+              style={{ color: '#666' }}
+              onClick={() => handleNavigateToDetail(record.id)}>
+              详情
+            </Button>
+            {showEntry && (
+              <Button type="text" size="small" icon={<EditOutlined />}
+                style={{ color: '#1677ff' }}
+                onClick={() => handleNavigateToEntry(record.id)}>
+                录入
+              </Button>
+            )}
+            {showReview && (
+              <Button type="text" size="small" icon={<AuditOutlined />}
+                style={{ color: '#52c41a' }}
+                onClick={() => handleNavigateToReview(record.id)}>
+                评审
+              </Button>
+            )}
+            {showClose && (
+              <Button type="text" size="small" danger icon={<CloseCircleOutlined />}
+                onClick={() => handleOpenCloseModal(record)}>
+                关闭
+              </Button>
+            )}
           </Space>
         );
       },
@@ -328,47 +435,75 @@ export default function WorkbenchPage() {
   const closeReviewRows = closeTargetApp ? buildCloseReviewRows(closeTargetApp) : [];
   const showReviewTable = closeTargetApp ? hasAnyRoleEnteredReview(closeTargetApp) : false;
 
-  // Todo panel width
-  const TODO_PANEL_WIDTH = 320;
+  const TODO_PANEL_WIDTH = 340;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1600, margin: '0 auto' }}>
+    <div style={{ padding: '20px 24px', background: '#f5f5f7', minHeight: 'calc(100vh - 56px)' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <Title level={3} style={{ margin: 0, letterSpacing: 1 }}>工作台</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>管理转维项目申请与待办任务</Text>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1a1a2e' }}>工作台</h2>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            欢迎回来，{currentUser.name}
+          </Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} size="large" onClick={handleNavigateToApply}
-          style={{ height: 44, paddingInline: 28, fontSize: 15, fontWeight: 600 }}>
+          style={{ height: 42, paddingInline: 24, fontSize: 14, fontWeight: 600, borderRadius: 8 }}>
           项目转维申请
         </Button>
       </div>
 
-      {/* Main content: left-right layout */}
+      {/* Stat Cards */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+        <StatCard
+          title="全部项目" count={stats.total}
+          icon={<ProjectOutlined />} color="#6366f1" bgColor="#eef2ff"
+          active={statusFilter === 'all'} onClick={() => handleStatusFilter('all')}
+        />
+        <StatCard
+          title="进行中" count={stats.inProgress}
+          icon={<SyncOutlined />} color="#1677ff" bgColor="#e6f4ff"
+          active={statusFilter === 'in_progress'} onClick={() => handleStatusFilter('in_progress')}
+        />
+        <StatCard
+          title="已完成" count={stats.completed}
+          icon={<CheckCircleOutlined />} color="#52c41a" bgColor="#f6ffed"
+          active={statusFilter === 'completed'} onClick={() => handleStatusFilter('completed')}
+        />
+        <StatCard
+          title="已关闭" count={stats.cancelled}
+          icon={<StopOutlined />} color="#8c8c8c" bgColor="#fafafa"
+          active={statusFilter === 'cancelled'} onClick={() => handleStatusFilter('cancelled')}
+        />
+      </div>
+
+      {/* Main content */}
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         {/* Left: Application list */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Card
-            title={
+          <div style={{
+            background: '#fff', borderRadius: 12, overflow: 'hidden',
+            border: '1px solid #f0f0f0',
+          }}>
+            {/* Table header */}
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid #f0f0f0',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
               <Space>
-                <Text strong>转维申请列表</Text>
-                <Tag>{filteredApplications.length} 条记录</Tag>
+                <Text strong style={{ fontSize: 15 }}>转维申请列表</Text>
+                <Tag style={{ borderRadius: 10, fontSize: 12 }}>{filteredApplications.length} 条</Tag>
               </Space>
-            }
-            extra={
               <Input.Search
-                placeholder="搜索项目名"
+                placeholder="搜索项目名称..."
                 allowClear
-                enterButton={<><SearchOutlined /> 搜索</>}
-                size="small"
-                style={{ width: 280 }}
+                size="middle"
+                style={{ width: 260 }}
                 onSearch={handleSearch}
                 onChange={(e) => { if (!e.target.value) handleSearch(''); }}
               />
-            }
-            styles={{ body: { padding: 0 } }}
-          >
+            </div>
+
             <Table<TransferApplication>
               columns={columns}
               dataSource={paginatedData}
@@ -377,124 +512,115 @@ export default function WorkbenchPage() {
                 current: currentPage,
                 pageSize: PAGE_SIZE,
                 total: filteredApplications.length,
-                onChange: handlePageChange,
+                onChange: (page) => setCurrentPage(page),
                 showSizeChanger: false,
                 showTotal: (total) => `共 ${total} 条`,
                 size: 'small',
+                style: { marginRight: 16 },
               }}
               scroll={{ x: 900 }}
-              size="small"
-              rowClassName={(record) => record.status === 'cancelled' ? 'ant-table-row-cancelled' : ''}
+              size="middle"
+              rowClassName={(record) =>
+                record.status === 'cancelled' ? 'row-cancelled' : ''
+              }
             />
-          </Card>
+          </div>
         </div>
 
         {/* Right: Todo panel */}
-        <div
-          style={{
-            width: todoCollapsed ? 48 : TODO_PANEL_WIDTH,
-            flexShrink: 0,
-            transition: 'width 0.3s ease',
-          }}
-        >
+        <div style={{
+          width: todoCollapsed ? 48 : TODO_PANEL_WIDTH,
+          flexShrink: 0,
+          transition: 'width 0.3s ease',
+        }}>
           {todoCollapsed ? (
-            /* Collapsed: vertical badge button */
             <div
               onClick={() => setTodoCollapsed(false)}
               style={{
-                background: '#fff',
-                borderRadius: 8,
-                padding: '16px 8px',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 8,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                background: '#fff', borderRadius: 12, padding: '16px 8px',
+                cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 8,
                 border: '1px solid #f0f0f0',
               }}
             >
               <Badge count={userTodos.length} size="small">
-                <CarryOutOutlined style={{ fontSize: 20, color: '#4338ca' }} />
+                <CarryOutOutlined style={{ fontSize: 20, color: '#6366f1' }} />
               </Badge>
-              <div
-                style={{
-                  writingMode: 'vertical-rl',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#333',
-                  letterSpacing: 2,
-                }}
-              >
+              <div style={{ writingMode: 'vertical-rl', fontSize: 13, fontWeight: 600, color: '#333', letterSpacing: 2 }}>
                 待办任务
               </div>
               <LeftOutlined style={{ fontSize: 11, color: '#999' }} />
             </div>
           ) : (
-            /* Expanded: full todo panel */
-            <Card
-              title={
+            <div style={{
+              background: '#fff', borderRadius: 12, overflow: 'hidden',
+              border: '1px solid #f0f0f0',
+            }}>
+              {/* Todo header */}
+              <div style={{
+                padding: '16px 20px', borderBottom: '1px solid #f0f0f0',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
                 <Space>
-                  <CarryOutOutlined style={{ color: '#4338ca' }} />
-                  <span>待办任务</span>
+                  <CarryOutOutlined style={{ color: '#6366f1', fontSize: 16 }} />
+                  <Text strong style={{ fontSize: 15 }}>待办任务</Text>
                   <Badge
                     count={userTodos.length}
                     style={{ background: userTodos.length > 0 ? '#ff4d4f' : '#d9d9d9' }}
                   />
                 </Space>
-              }
-              extra={
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<RightOutlined />}
-                  onClick={() => setTodoCollapsed(true)}
-                  title="收起"
+                <Button type="text" size="small" icon={<RightOutlined />}
+                  onClick={() => setTodoCollapsed(true)} title="收起"
+                  style={{ color: '#999' }}
                 />
-              }
-              styles={{ body: { padding: 0, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' } }}
-              style={{ borderRadius: 8 }}
-            >
-              {userTodos.length === 0 ? (
-                <div style={{ padding: 32, textAlign: 'center' }}>
-                  <Text type="secondary">暂无待办</Text>
-                </div>
-              ) : (
-                userTodos.map((todo) => {
-                  const typeConfig = TODO_TYPE_CONFIG[todo.type];
-                  return (
-                    <div
-                      key={todo.id}
-                      style={{
-                        padding: '12px 16px',
-                        borderBottom: '1px solid #f5f5f5',
-                        cursor: 'pointer',
-                        transition: 'background 0.2s',
-                        borderLeft: `3px solid ${typeConfig.color}`,
-                      }}
-                      onClick={() => handleTodoAction(todo)}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#fafafa'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text strong ellipsis style={{ fontSize: 13, flex: 1 }}>
-                          {todo.projectName}
-                        </Text>
-                        <Tag color={typeConfig.color} style={{ margin: 0, fontSize: 11 }}>
-                          {typeConfig.label}
-                        </Tag>
+              </div>
+
+              {/* Todo list */}
+              <div style={{ maxHeight: 'calc(100vh - 340px)', overflowY: 'auto' }}>
+                {userTodos.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center' }}>
+                    <ClockCircleOutlined style={{ fontSize: 32, color: '#d9d9d9', marginBottom: 12 }} />
+                    <div style={{ color: '#999', fontSize: 13 }}>暂无待办任务</div>
+                  </div>
+                ) : (
+                  userTodos.map((todo) => {
+                    const typeConfig = TODO_TYPE_CONFIG[todo.type];
+                    return (
+                      <div
+                        key={todo.id}
+                        style={{
+                          padding: '14px 20px',
+                          borderBottom: '1px solid #f8f8f8',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s',
+                          borderLeft: `3px solid ${typeConfig.color}`,
+                        }}
+                        onClick={() => handleTodoAction(todo)}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#fafbff'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text strong style={{ fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {todo.projectName}
+                          </Text>
+                          <Tag
+                            color={typeConfig.color}
+                            icon={typeConfig.icon}
+                            style={{ margin: 0, fontSize: 11, borderRadius: 4, lineHeight: '18px', padding: '0 6px' }}
+                          >
+                            {typeConfig.label}
+                          </Tag>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>{todo.node}</Text>
+                          <RightOutlined style={{ fontSize: 10, color: '#d9d9d9' }} />
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          {todo.node}
-                        </Text>
-                        <RightOutlined style={{ fontSize: 10, color: '#bbb' }} />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </Card>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -155,21 +155,42 @@ function renderDeliverables(deliverables: ReadonlyArray<Deliverable>): React.Rea
 
 // --- 团队成员卡片 ---
 
+const ROLE_SORT_ORDER: Record<string, number> = {
+  SPM: 1, TPM: 2, '底软': 3, '系统': 4, SQA: 5,
+};
+
+const sortTeamMembers = (members: ReadonlyArray<TeamMember>): ReadonlyArray<TeamMember> =>
+  [...members].sort((a, b) => (ROLE_SORT_ORDER[a.role] ?? 9) - (ROLE_SORT_ORDER[b.role] ?? 9));
+
+const ROLE_AVATAR_COLOR: Record<string, string> = {
+  SPM: '#1677ff',
+  TPM: '#52c41a',
+  SQA: '#faad14',
+  '底软': '#722ed1',
+  '系统': '#eb2f96',
+};
+
 function TeamMemberCard({ member }: { readonly member: TeamMember }) {
-  const avatarColor = member.role === 'SPM' ? '#1677ff'
-    : member.role === 'TPM' ? '#52c41a'
-    : member.role === 'SQA' ? '#faad14'
-    : member.role === '底软' ? '#722ed1'
-    : '#eb2f96';
+  const avatarColor = ROLE_AVATAR_COLOR[member.role] ?? '#999';
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
-      <Avatar style={{ backgroundColor: avatarColor }} size={36}>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      padding: '8px 12px',
+      borderRadius: 8,
+      background: '#fafafa',
+      border: '1px solid #f0f0f0',
+    }}>
+      <Avatar style={{ backgroundColor: avatarColor, flexShrink: 0 }} size={34}>
         {member.name.slice(0, 1)}
       </Avatar>
-      <div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 14 }}>{member.name}</div>
-        <div style={{ color: '#888', fontSize: 12 }}>{member.role}{member.department ? ` / ${member.department}` : ''}</div>
+        <div style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {member.role}{member.department ? ` · ${member.department}` : ''}
+        </div>
       </div>
     </div>
   );
@@ -529,7 +550,7 @@ export default function ApplicationDetailPage({
       {/* 取消提示横幅 */}
       {application.status === 'cancelled' && application.cancelReason && (
         <Alert
-          message="该转维申请已取消"
+          title="该转维申请已取消"
           description={`取消原因：${application.cancelReason}`}
           type="error"
           showIcon
@@ -542,43 +563,40 @@ export default function ApplicationDetailPage({
         <PipelineProgress pipeline={application.pipeline} showRoleDots />
       </Card>
 
-      {/* 5.2 项目基础信息 + 5.3 团队信息 */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-        {/* 项目信息 */}
-        <Card title="项目信息" style={{ flex: 1 }}>
-          <Descriptions column={2} size="small" labelStyle={{ fontWeight: 500, color: '#666' }}>
-            <Descriptions.Item label="项目名">{application.projectName}</Descriptions.Item>
-            <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
-            <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
-            <Descriptions.Item label="转维负责人">
-              {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
-            <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
-            <Descriptions.Item label="项目状态">
-              <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="备注">{application.remark || '-'}</Descriptions.Item>
-          </Descriptions>
-        </Card>
+      {/* 5.2 项目基础信息 */}
+      <Card title="项目信息" style={{ marginBottom: 20 }}>
+        <Descriptions column={4} size="small" styles={{ label: { fontWeight: 500, color: '#666' } }}>
+          <Descriptions.Item label="项目名">{application.projectName}</Descriptions.Item>
+          <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
+          <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
+          <Descriptions.Item label="转维负责人">
+            {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
+          <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
+          <Descriptions.Item label="项目状态">
+            <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="备注">{application.remark || '-'}</Descriptions.Item>
+        </Descriptions>
+      </Card>
 
-        {/* 团队信息 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: 400 }}>
-          <Card title="在研团队" size="small">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {application.team.research.map((member) => (
-                <TeamMemberCard key={member.id} member={member} />
-              ))}
-            </div>
-          </Card>
-          <Card title="维护团队" size="small">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {application.team.maintenance.map((member) => (
-                <TeamMemberCard key={member.id} member={member} />
-              ))}
-            </div>
-          </Card>
-        </div>
+      {/* 5.3 团队信息：在研团队 + 维护团队 左右布局 */}
+      <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+        <Card title="在研团队" size="small" style={{ flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {sortTeamMembers(application.team.research).map((member) => (
+              <TeamMemberCard key={member.id} member={member} />
+            ))}
+          </div>
+        </Card>
+        <Card title="维护团队" size="small" style={{ flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {sortTeamMembers(application.team.maintenance).map((member) => (
+              <TeamMemberCard key={member.id} member={member} />
+            ))}
+          </div>
+        </Card>
       </div>
 
       {/* 5.4 转维CheckList */}
