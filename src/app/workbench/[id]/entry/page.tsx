@@ -495,7 +495,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <h2>未找到转维申请</h2>
-        <Button onClick={() => router.back()}>返回</Button>
+        <Button onClick={() => router.push('/workbench')}>返回</Button>
       </div>
     );
   }

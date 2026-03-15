@@ -664,7 +664,7 @@ export default function ApplicationDetailPage({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontWeight: 500 }}>{record.action}</span>
                     <span style={{ color: '#888', fontSize: 12 }}>
-                      {record.operator} - {record.timestamp.slice(0, 16).replace('T', ' ')}
+                      {record.operator} - {new Date(record.timestamp).toLocaleString('zh-CN')}
                     </span>
                   </div>
                   <div style={{ color: '#555', fontSize: 13, marginTop: 4 }}>

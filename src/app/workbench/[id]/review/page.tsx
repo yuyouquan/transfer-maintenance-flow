@@ -138,7 +138,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <h2>未找到转维申请</h2>
-        <Button onClick={() => router.back()}>返回</Button>
+        <Button onClick={() => router.push('/workbench')}>返回</Button>
       </div>
     );
   }
@@ -714,10 +714,15 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           placeholder="选择委派人员"
           value={delegatePersonId}
           onChange={setDelegatePersonId}
-          options={MOCK_USERS.filter((u) => u.id !== currentUser.id).map((u) => ({
-            value: u.id,
-            label: `${u.name} (${u.role} - ${u.department})`,
-          }))}
+          options={(() => {
+            const alreadyDelegated = new Set(
+              [...checklistItems, ...reviewElements]
+                .flatMap((i) => i.delegatedTo ?? [])
+            );
+            return MOCK_USERS
+              .filter((u) => u.id !== currentUser.id && !alreadyDelegated.has(u.id))
+              .map((u) => ({ value: u.id, label: `${u.name} (${u.role} - ${u.department})` }));
+          })()}
           optionFilterProp="label"
           showSearch
         />
