@@ -17,6 +17,15 @@ import {
 import type {
   CheckListItem, ReviewElement, ReviewStatus,
 } from '@/types';
+import { useCurrentUser } from '@/context/UserContext';
+
+// Map team role to checklist responsibleRole
+const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
+  SPM: 'SPM',
+  TPM: '测试',
+  '底软': '底软',
+  '系统': '系统',
+};
 
 const { TextArea } = Input;
 
@@ -74,15 +83,35 @@ interface LegacyTaskForm {
 export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
   const application = MOCK_APPLICATIONS.find((a) => a.id === id);
 
-  // 审核数据状态（不可变更新）
-  const [checklistItems, setChecklistItems] = useState<CheckListItem[]>(
+  // Determine user's responsible role from the maintenance team
+  const userResponsibleRole = useMemo(() => {
+    if (!application) return null;
+    const member = application.team.maintenance.find((m) => m.id === currentUser.id);
+    if (!member) return null;
+    return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
+  }, [application, currentUser.id]);
+
+  // 审核数据状态（不可变更新）- filtered by user's maintenance role
+  const [allChecklistItems, setAllChecklistItems] = useState<CheckListItem[]>(
     () => MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === id)
   );
-  const [reviewElements, setReviewElements] = useState<ReviewElement[]>(
+  const [allReviewElements, setAllReviewElements] = useState<ReviewElement[]>(
     () => MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === id)
   );
+
+  // Only show items matching current user's responsible role
+  const checklistItems = useMemo(() => {
+    if (!userResponsibleRole) return allChecklistItems;
+    return allChecklistItems.filter((i) => i.responsibleRole === userResponsibleRole);
+  }, [allChecklistItems, userResponsibleRole]);
+
+  const reviewElements = useMemo(() => {
+    if (!userResponsibleRole) return allReviewElements;
+    return allReviewElements.filter((i) => i.responsibleRole === userResponsibleRole);
+  }, [allReviewElements, userResponsibleRole]);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
@@ -111,18 +140,19 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     return <Card><Alert type="error" message="未找到该转维申请记录" /></Card>;
   }
 
-  // 当前审核角色（示例用SPM）
-  const currentRole = 'SPM';
-  const roleLeader = application.team.maintenance.find((m) => m.role === currentRole);
+  // 当前审核角色 - 从维护团队中获取
+  const currentRole = userResponsibleRole ?? 'SPM';
+  const maintenanceMember = application.team.maintenance.find((m) => m.id === currentUser.id);
+  const roleLeader = maintenanceMember;
 
   // --- 单条通过/不通过 ---
   const handleItemReview = (itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
     if (type === 'checklist') {
-      setChecklistItems((prev) =>
+      setAllChecklistItems((prev) =>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
       );
     } else {
-      setReviewElements((prev) =>
+      setAllReviewElements((prev) =>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
       );
     }
@@ -132,13 +162,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- 批量操作 ---
   const handleBatchReview = (newStatus: ReviewStatus) => {
     if (activeTab === 'checklist') {
-      setChecklistItems((prev) =>
+      setAllChecklistItems((prev) =>
         prev.map((item) =>
           selectedRowKeys.includes(item.id) ? { ...item, reviewStatus: newStatus } : item
         )
       );
     } else {
-      setReviewElements((prev) =>
+      setAllReviewElements((prev) =>
         prev.map((item) =>
           selectedRowKeys.includes(item.id) ? { ...item, reviewStatus: newStatus } : item
         )

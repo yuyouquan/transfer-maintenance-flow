@@ -18,6 +18,15 @@ import type {
   CheckListItem, ReviewElement, EntryStatus, AICheckStatus, ReviewStatus,
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
+import { useCurrentUser } from '@/context/UserContext';
+
+// Map team role to checklist responsibleRole
+const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
+  SPM: 'SPM',
+  TPM: '测试',
+  '底软': '底软',
+  '系统': '系统',
+};
 
 const { TextArea } = Input;
 
@@ -63,6 +72,7 @@ function renderDeliverables(deliverables: ReadonlyArray<{ name: string; url: str
 export default function DataEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
   const router = useRouter();
+  const { currentUser } = useCurrentUser();
 
   // Find application
   const application = useMemo(
@@ -70,13 +80,32 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [id],
   );
 
-  // Local state for checklist items and review elements (immutable updates)
+  // Determine user's responsible role from the research team
+  const userResponsibleRole = useMemo(() => {
+    if (!application) return null;
+    const member = application.team.research.find((m) => m.id === currentUser.id);
+    if (!member) return null;
+    return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
+  }, [application, currentUser.id]);
+
+  // Local state for checklist items and review elements - filtered by user's role
   const [checklistItems, setChecklistItems] = useState<ReadonlyArray<CheckListItem>>(
     () => MOCK_CHECKLIST_ITEMS.filter((item) => item.applicationId === id),
   );
   const [reviewElements, setReviewElements] = useState<ReadonlyArray<ReviewElement>>(
     () => MOCK_REVIEW_ELEMENTS.filter((item) => item.applicationId === id),
   );
+
+  // Only show items matching current user's responsible role
+  const roleFilteredChecklist = useMemo(() => {
+    if (!userResponsibleRole) return checklistItems;
+    return checklistItems.filter((item) => item.responsibleRole === userResponsibleRole);
+  }, [checklistItems, userResponsibleRole]);
+
+  const roleFilteredReviewElements = useMemo(() => {
+    if (!userResponsibleRole) return reviewElements;
+    return reviewElements.filter((item) => item.responsibleRole === userResponsibleRole);
+  }, [reviewElements, userResponsibleRole]);
 
   // Block tasks for rejected alert
   const blockTasks = useMemo(
@@ -112,35 +141,35 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // --- Filtered data ---
 
   const filteredChecklist = useMemo(() => {
-    return checklistItems.filter((item) => {
+    return roleFilteredChecklist.filter((item) => {
       if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
       if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
       return true;
     });
-  }, [checklistItems, entryStatusFilter, aiCheckStatusFilter]);
+  }, [roleFilteredChecklist, entryStatusFilter, aiCheckStatusFilter]);
 
   const filteredReviewElements = useMemo(() => {
-    return reviewElements.filter((item) => {
+    return roleFilteredReviewElements.filter((item) => {
       if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
       if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
       return true;
     });
-  }, [reviewElements, entryStatusFilter, aiCheckStatusFilter]);
+  }, [roleFilteredReviewElements, entryStatusFilter, aiCheckStatusFilter]);
 
-  // --- Check if all items are entered and AI passed ---
+  // --- Check if all items for this role are entered and AI passed ---
 
   const allChecklistReady = useMemo(
-    () => checklistItems.length > 0 && checklistItems.every(
+    () => roleFilteredChecklist.length > 0 && roleFilteredChecklist.every(
       (item) => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed',
     ),
-    [checklistItems],
+    [roleFilteredChecklist],
   );
 
   const allReviewElementsReady = useMemo(
-    () => reviewElements.length > 0 && reviewElements.every(
+    () => roleFilteredReviewElements.length > 0 && roleFilteredReviewElements.every(
       (item) => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed',
     ),
-    [reviewElements],
+    [roleFilteredReviewElements],
   );
 
   const canSubmitReview = allChecklistReady && allReviewElementsReady;
@@ -148,9 +177,9 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // --- Has rejected items (show block alert) ---
 
   const hasRejectedItems = useMemo(
-    () => checklistItems.some((i) => i.reviewStatus === 'rejected')
-      || reviewElements.some((i) => i.reviewStatus === 'rejected'),
-    [checklistItems, reviewElements],
+    () => roleFilteredChecklist.some((i) => i.reviewStatus === 'rejected')
+      || roleFilteredReviewElements.some((i) => i.reviewStatus === 'rejected'),
+    [roleFilteredChecklist, roleFilteredReviewElements],
   );
 
   // --- Entry modal handlers ---
@@ -448,6 +477,11 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         </Button>
         <h2 style={{ margin: 0 }}>资料录入与AI检查</h2>
         <span style={{ color: '#888', fontSize: 14 }}>{application.projectName}</span>
+        {userResponsibleRole && (
+          <Tag color="blue" style={{ marginLeft: 8, fontSize: 13 }}>
+            {userResponsibleRole}角色
+          </Tag>
+        )}
       </div>
 
       {/* Pipeline Progress */}
@@ -506,11 +540,11 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           </Space>
 
           <Space size={8}>
-            {canSubmitReview && (
-              <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmitReview}>
+            <Tooltip title={canSubmitReview ? '所有录入项已通过AI检查，可以提交审核' : '需要所有录入项的录入状态和AI检查都通过后才能提交'}>
+              <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
                 提交审核
               </Button>
-            )}
+            </Tooltip>
             {selectedKeys.length > 0 && (
               <Button onClick={() => openDelegateModal(selectedKeys as string[], currentTab)}>
                 全部委派 ({selectedKeys.length})
@@ -532,7 +566,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           items={[
             {
               key: 'checklist',
-              label: `转维材料 (${checklistItems.length})`,
+              label: `转维材料 (${roleFilteredChecklist.length})`,
               children: (
                 <Table<CheckListItem>
                   rowKey="id"
@@ -550,7 +584,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
             },
             {
               key: 'review',
-              label: `评审要素 (${reviewElements.length})`,
+              label: `评审要素 (${roleFilteredReviewElements.length})`,
               children: (
                 <Table<ReviewElement>
                   rowKey="id"
