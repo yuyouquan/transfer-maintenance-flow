@@ -11,14 +11,14 @@ import {
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
-import {
-  MOCK_APPLICATIONS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS, MOCK_USERS,
-} from '@/mock';
+import { MOCK_USERS } from '@/mock';
+import { useApplications } from '@/context/ApplicationContext';
 import type {
   CheckListItem, ReviewElement, ReviewStatus,
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
+import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 
 // Map team role to checklist responsibleRole
 const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
@@ -73,7 +73,15 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const { id } = React.use(params);
   const router = useRouter();
   const { currentUser } = useCurrentUser();
-  const application = MOCK_APPLICATIONS.find((a) => a.id === id);
+  const {
+    applications, checklistItems: ctxChecklist, reviewElements: ctxReview,
+    updateChecklistItems, updateReviewElements,
+  } = useApplications();
+
+  const application = useMemo(
+    () => applications.find((a) => a.id === id),
+    [applications, id],
+  );
 
   // Determine user's responsible role from the maintenance team
   const userResponsibleRole = useMemo(() => {
@@ -83,12 +91,36 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
   }, [application, currentUser.id]);
 
-  // State
-  const [allChecklistItems, setAllChecklistItems] = useState<CheckListItem[]>(
-    () => MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === id)
+  // Derived from context
+  const allChecklistItems = useMemo(
+    () => ctxChecklist.filter((i) => i.applicationId === id) as CheckListItem[],
+    [ctxChecklist, id],
   );
-  const [allReviewElements, setAllReviewElements] = useState<ReviewElement[]>(
-    () => MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === id)
+  const allReviewElements = useMemo(
+    () => ctxReview.filter((i) => i.applicationId === id) as ReviewElement[],
+    [ctxReview, id],
+  );
+
+  // Wrappers to update context directly
+  const setAllChecklistItems = useCallback(
+    (updater: (prev: CheckListItem[]) => CheckListItem[]) => {
+      updateChecklistItems((all) => {
+        const others = all.filter((i) => i.applicationId !== id);
+        const current = all.filter((i) => i.applicationId === id) as CheckListItem[];
+        return [...others, ...updater(current)];
+      });
+    },
+    [updateChecklistItems, id],
+  );
+  const setAllReviewElements = useCallback(
+    (updater: (prev: ReviewElement[]) => ReviewElement[]) => {
+      updateReviewElements((all) => {
+        const others = all.filter((i) => i.applicationId !== id);
+        const current = all.filter((i) => i.applicationId === id) as ReviewElement[];
+        return [...others, ...updater(current)];
+      });
+    },
+    [updateReviewElements, id],
   );
 
   // Role-filtered views
@@ -179,6 +211,19 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
   };
 
+  // Helper: update all items of current role to a given reviewStatus
+  const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus) => {
+    const isMyRoleItem = (item: CheckListItem | ReviewElement) =>
+      item.responsibleRole === userResponsibleRole;
+
+    setAllChecklistItems((prev) =>
+      prev.map((item) => isMyRoleItem(item) ? { ...item, reviewStatus: newStatus } : item)
+    );
+    setAllReviewElements((prev) =>
+      prev.map((item) => isMyRoleItem(item) ? { ...item, reviewStatus: newStatus } : item)
+    );
+  }, [setAllChecklistItems, setAllReviewElements, userResponsibleRole]);
+
   // --- Pass confirm ---
   const handlePassConfirm = () => {
     if (wantLegacy) {
@@ -190,10 +235,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         return;
       }
     }
+    applyRoleReviewStatus('passed');
     message.success('审核通过，已提交');
     setPassModalOpen(false);
     setWantLegacy(false);
     setLegacyTasks([{ responsiblePerson: '', department: '', description: '', deadline: '' }]);
+    router.push(`/workbench/${id}`);
   };
 
   // --- Fail confirm ---
@@ -209,10 +256,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       message.warning('请填写完整所有Block任务信息');
       return;
     }
+    applyRoleReviewStatus('rejected');
     message.success('已拒绝并创建Block任务，已回退到资料录入阶段');
     setFailModalOpen(false);
     setReviewComment('');
     setBlockTasks([{ description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' }]);
+    router.push(`/workbench/${id}`);
   };
 
   // --- Block task CRUD ---
@@ -310,15 +359,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       ),
     },
     {
-      title: '交付件', key: 'deliverables', width: 120,
-      render: (_: unknown, record: CheckListItem) =>
-        record.deliverables.length > 0
-          ? record.deliverables.map((d) => (
-              <a key={d.id} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, display: 'block' }}>
-                {d.name}
-              </a>
-            ))
-          : <span style={{ color: '#999' }}>-</span>,
+      title: '交付件', key: 'deliverables', width: 180,
+      render: (_: unknown, record: CheckListItem) => <EntryContentRenderer content={record.entryContent} />,
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
@@ -388,14 +430,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: '交付件', key: 'deliverables', width: 120,
-      render: (_: unknown, record: ReviewElement) =>
-        record.deliverables.length > 0
-          ? record.deliverables.map((d) => (
-              <a key={d.id} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, display: 'block' }}>
-                {d.name}
-              </a>
-            ))
-          : <span style={{ color: '#999' }}>-</span>,
+      render: (_: unknown, record: ReviewElement) => <EntryContentRenderer content={record.entryContent} />,
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',

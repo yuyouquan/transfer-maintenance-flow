@@ -18,8 +18,6 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined,
-  FileTextOutlined,
-  LinkOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -30,13 +28,11 @@ import {
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import {
-  MOCK_APPLICATIONS,
-  MOCK_CHECKLIST_ITEMS,
-  MOCK_REVIEW_ELEMENTS,
   MOCK_BLOCK_TASKS,
   MOCK_LEGACY_TASKS,
   MOCK_HISTORY,
 } from '@/mock';
+import { useApplications } from '@/context/ApplicationContext';
 import type {
   TransferApplication,
   CheckListItem,
@@ -47,10 +43,10 @@ import type {
   EntryStatus,
   AICheckStatus,
   ReviewStatus,
-  Deliverable,
   TeamMember,
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
+import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 
 // --- 状态标签渲染 ---
 
@@ -137,20 +133,8 @@ function renderReviewStatusTag(
   return <Tag color={config.color}>{config.label}</Tag>;
 }
 
-function renderDeliverables(deliverables: ReadonlyArray<Deliverable>): React.ReactNode {
-  if (deliverables.length === 0) {
-    return <span style={{ color: '#999' }}>-</span>;
-  }
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {deliverables.map((d) => (
-        <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13 }}>
-          {d.type === 'file' ? <FileTextOutlined style={{ marginRight: 4 }} /> : <LinkOutlined style={{ marginRight: 4 }} />}
-          {d.name}
-        </a>
-      ))}
-    </div>
-  );
+function renderEntryContent(record: { entryContent?: string }): React.ReactNode {
+  return <EntryContentRenderer content={record.entryContent} />;
 }
 
 // --- 团队成员卡片 ---
@@ -205,14 +189,15 @@ export default function ApplicationDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
+  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview } = useApplications();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalContent, setModalContent] = useState('');
 
-  const application = MOCK_APPLICATIONS.find((app) => app.id === id);
+  const application = applications.find((app) => app.id === id);
 
-  const checklistItems = MOCK_CHECKLIST_ITEMS.filter((item) => item.applicationId === id);
-  const reviewElements = MOCK_REVIEW_ELEMENTS.filter((item) => item.applicationId === id);
+  const checklistItems = ctxChecklist.filter((item) => item.applicationId === id);
+  const reviewElements = ctxReview.filter((item) => item.applicationId === id);
   const blockTasks = MOCK_BLOCK_TASKS.filter((task) => task.applicationId === id);
   const legacyTasks = MOCK_LEGACY_TASKS.filter((task) => task.applicationId === id);
   const historyRecords = MOCK_HISTORY.filter((record) => record.applicationId === id);
@@ -274,7 +259,7 @@ export default function ApplicationDetailPage({
       dataIndex: 'deliverables',
       key: 'deliverables',
       width: 180,
-      render: (_: unknown, record: CheckListItem) => renderDeliverables(record.deliverables),
+      render: (_: unknown, record: CheckListItem) => renderEntryContent(record),
     },
     {
       title: '录入状态',
@@ -351,7 +336,7 @@ export default function ApplicationDetailPage({
       dataIndex: 'deliverables',
       key: 'deliverables',
       width: 180,
-      render: (_: unknown, record: ReviewElement) => renderDeliverables(record.deliverables),
+      render: (_: unknown, record: ReviewElement) => renderEntryContent(record),
     },
     {
       title: '录入状态',

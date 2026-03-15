@@ -6,11 +6,217 @@ import type {
   LegacyTask,
   HistoryRecord,
   TodoItem,
+  PipelineRole,
+  TeamMember,
+  EntryStatus,
+  AICheckStatus,
+  ReviewStatus,
 } from '@/types';
+import { MOCK_CHECKLIST_TEMPLATES } from './checklist-template';
+import { MOCK_REVIEW_ELEMENT_TEMPLATES } from './review-element-template';
+
+// ============================================================
+// Role mapping helpers (same logic as ApplicationContext)
+// ============================================================
+
+const ROLE_TO_TEAM_ROLE: Record<string, string> = {
+  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统',
+};
+
+function findMemberByPipelineRole(
+  members: ReadonlyArray<TeamMember>,
+  pipelineRole: PipelineRole,
+): TeamMember | undefined {
+  const teamRole = ROLE_TO_TEAM_ROLE[pipelineRole];
+  return members.find((m) => m.role === teamRole);
+}
+
+// ============================================================
+// Item generation from templates
+// ============================================================
+
+interface ItemOverride {
+  readonly entryContent?: string;
+  readonly entryStatus: EntryStatus;
+  readonly aiCheckStatus: AICheckStatus;
+  readonly aiCheckResult?: string;
+  readonly reviewStatus: ReviewStatus;
+  readonly reviewComment?: string;
+}
+
+function generateChecklist(
+  applicationId: string,
+  research: ReadonlyArray<TeamMember>,
+  maintenance: ReadonlyArray<TeamMember>,
+  overrides: Record<number, ItemOverride> = {},
+): CheckListItem[] {
+  return MOCK_CHECKLIST_TEMPLATES.map((tpl, idx) => {
+    const entryPerson = findMemberByPipelineRole(research, tpl.responsibleRole);
+    const reviewPerson = findMemberByPipelineRole(maintenance, tpl.responsibleRole);
+    const ov = overrides[idx];
+    return {
+      id: `${applicationId}-cli-${String(idx + 1).padStart(3, '0')}`,
+      applicationId,
+      seq: idx + 1,
+      type: tpl.type,
+      checkItem: tpl.checkItem,
+      responsibleRole: tpl.responsibleRole,
+      entryPerson: entryPerson?.name ?? '-',
+      entryPersonId: entryPerson?.id ?? '',
+      reviewPerson: reviewPerson?.name ?? '-',
+      reviewPersonId: reviewPerson?.id ?? '',
+      aiCheckRule: tpl.aiCheckRule,
+      deliverables: [],
+      entryContent: ov?.entryContent,
+      entryStatus: ov?.entryStatus ?? 'not_entered',
+      aiCheckStatus: ov?.aiCheckStatus ?? 'not_started',
+      aiCheckResult: ov?.aiCheckResult,
+      reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
+      reviewComment: ov?.reviewComment,
+    };
+  });
+}
+
+function generateReviewEls(
+  applicationId: string,
+  research: ReadonlyArray<TeamMember>,
+  maintenance: ReadonlyArray<TeamMember>,
+  overrides: Record<number, ItemOverride> = {},
+): ReviewElement[] {
+  return MOCK_REVIEW_ELEMENT_TEMPLATES.map((tpl, idx) => {
+    const role = tpl.responsibleRole as PipelineRole;
+    const entryPerson = findMemberByPipelineRole(research, role);
+    const reviewPerson = findMemberByPipelineRole(maintenance, role);
+    const ov = overrides[idx];
+    return {
+      id: `${applicationId}-rei-${String(idx + 1).padStart(3, '0')}`,
+      applicationId,
+      seq: idx + 1,
+      standard: tpl.standard,
+      description: tpl.description,
+      remark: tpl.remark,
+      responsibleRole: role,
+      entryPerson: entryPerson?.name ?? '-',
+      entryPersonId: entryPerson?.id ?? '',
+      reviewPerson: reviewPerson?.name ?? '-',
+      reviewPersonId: reviewPerson?.id ?? '',
+      aiCheckRule: tpl.aiCheckRule,
+      deliverables: [],
+      entryContent: ov?.entryContent,
+      entryStatus: ov?.entryStatus ?? 'not_entered',
+      aiCheckStatus: ov?.aiCheckStatus ?? 'not_started',
+      aiCheckResult: ov?.aiCheckResult,
+      reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
+      reviewComment: ov?.reviewComment,
+    };
+  });
+}
+
+// ============================================================
+// Helper: batch override for "all entered+passed+reviewed"
+// ============================================================
+
+const ENTERED_PASSED: ItemOverride = {
+  entryContent: '已录入，详见相关文档',
+  entryStatus: 'entered',
+  aiCheckStatus: 'passed',
+  reviewStatus: 'not_reviewed',
+};
+
+const ENTERED_PASSED_REVIEWED: ItemOverride = {
+  entryContent: '已录入，详见相关文档',
+  entryStatus: 'entered',
+  aiCheckStatus: 'passed',
+  reviewStatus: 'passed',
+};
+
+const ENTERED_PASSED_REVIEWING: ItemOverride = {
+  entryContent: '已录入，详见相关文档',
+  entryStatus: 'entered',
+  aiCheckStatus: 'passed',
+  reviewStatus: 'reviewing',
+};
+
+function rangeOverrides(
+  start: number,
+  end: number,
+  ov: ItemOverride,
+): Record<number, ItemOverride> {
+  const result: Record<number, ItemOverride> = {};
+  for (let i = start; i <= end; i++) {
+    result[i] = ov;
+  }
+  return result;
+}
 
 // ============================================================
 // Mock转维电子流申请数据
 // ============================================================
+
+// --- Teams ---
+const TEAM_APP001 = {
+  research: [
+    { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
+    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
+    { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
+    { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+  ],
+  maintenance: [
+    { id: 'u006', name: '孙八', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u007', name: '周九', role: 'TPM' as const, department: '测试部' },
+    { id: 'u008', name: '吴十', role: '底软' as const, department: '底软开发部' },
+    { id: 'u009', name: '郑十一', role: '系统' as const, department: '系统集成部' },
+  ],
+};
+
+const TEAM_APP002 = {
+  research: [
+    { id: 'u010', name: '冯十二', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u011', name: '陈十三', role: 'TPM' as const, department: '测试部' },
+    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
+    { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
+    { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
+  ],
+  maintenance: [
+    { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
+    { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
+    { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+  ],
+};
+
+const TEAM_APP003 = {
+  research: [
+    { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
+    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
+    { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
+    { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+  ],
+  maintenance: [
+    { id: 'u006', name: '孙八', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u007', name: '周九', role: 'TPM' as const, department: '测试部' },
+    { id: 'u008', name: '吴十', role: '底软' as const, department: '底软开发部' },
+    { id: 'u009', name: '郑十一', role: '系统' as const, department: '系统集成部' },
+  ],
+};
+
+const TEAM_APP004 = {
+  research: [
+    { id: 'u010', name: '冯十二', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u011', name: '陈十三', role: 'TPM' as const, department: '测试部' },
+    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
+    { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
+    { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
+  ],
+  maintenance: [
+    { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
+    { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
+    { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
+    { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+  ],
+};
 
 export const MOCK_APPLICATIONS: TransferApplication[] = [
   {
@@ -19,34 +225,20 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     projectName: 'X6870_H1234(Android16)',
     applicant: '张三',
     applicantId: 'u001',
-    team: {
-      research: [
-        { id: 'u001', name: '张三', role: 'SPM', department: '项目管理部' },
-        { id: 'u002', name: '李四', role: 'TPM', department: '测试部' },
-        { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
-        { id: 'u004', name: '赵六', role: '底软', department: '底软开发部' },
-        { id: 'u005', name: '钱七', role: '系统', department: '系统集成部' },
-      ],
-      maintenance: [
-        { id: 'u006', name: '孙八', role: 'SPM', department: '项目管理部' },
-        { id: 'u007', name: '周九', role: 'TPM', department: '测试部' },
-        { id: 'u008', name: '吴十', role: '底软', department: '底软开发部' },
-        { id: 'u009', name: '郑十一', role: '系统', department: '系统集成部' },
-      ],
-    },
+    team: TEAM_APP001,
     plannedReviewDate: '2026-04-15',
     remark: 'X6870项目Android16转维，计划4月中旬完成',
     status: 'in_progress',
     pipeline: {
       projectInit: 'success',
       dataEntry: 'in_progress',
-      maintenanceReview: 'in_progress',
+      maintenanceReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
-        { role: '测试', entryStatus: 'completed', reviewStatus: 'in_progress' },
+        { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'in_progress', reviewStatus: 'not_started' },
-        { role: '系统', entryStatus: 'rejected', reviewStatus: 'not_started' },
+        { role: '系统', entryStatus: 'in_progress', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-10T10:00:00Z',
@@ -58,21 +250,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     projectName: 'X6768_H5678(Android15)',
     applicant: '冯十二',
     applicantId: 'u010',
-    team: {
-      research: [
-        { id: 'u010', name: '冯十二', role: 'SPM', department: '项目管理部' },
-        { id: 'u011', name: '陈十三', role: 'TPM', department: '测试部' },
-        { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
-        { id: 'u012', name: '褚十四', role: '底软', department: '底软开发部' },
-        { id: 'u013', name: '卫十五', role: '系统', department: '系统集成部' },
-      ],
-      maintenance: [
-        { id: 'u001', name: '张三', role: 'SPM', department: '项目管理部' },
-        { id: 'u002', name: '李四', role: 'TPM', department: '测试部' },
-        { id: 'u004', name: '赵六', role: '底软', department: '底软开发部' },
-        { id: 'u005', name: '钱七', role: '系统', department: '系统集成部' },
-      ],
-    },
+    team: TEAM_APP002,
     plannedReviewDate: '2026-03-30',
     remark: 'X6768项目转维申请',
     status: 'in_progress',
@@ -97,21 +275,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     projectName: 'X6980_H9012(Android17)',
     applicant: '张三',
     applicantId: 'u001',
-    team: {
-      research: [
-        { id: 'u001', name: '张三', role: 'SPM', department: '项目管理部' },
-        { id: 'u002', name: '李四', role: 'TPM', department: '测试部' },
-        { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
-        { id: 'u004', name: '赵六', role: '底软', department: '底软开发部' },
-        { id: 'u005', name: '钱七', role: '系统', department: '系统集成部' },
-      ],
-      maintenance: [
-        { id: 'u006', name: '孙八', role: 'SPM', department: '项目管理部' },
-        { id: 'u007', name: '周九', role: 'TPM', department: '测试部' },
-        { id: 'u008', name: '吴十', role: '底软', department: '底软开发部' },
-        { id: 'u009', name: '郑十一', role: '系统', department: '系统集成部' },
-      ],
-    },
+    team: TEAM_APP003,
     plannedReviewDate: '2026-05-01',
     remark: '',
     status: 'cancelled',
@@ -137,21 +301,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     projectName: 'X6650_H3456(Android14)',
     applicant: '冯十二',
     applicantId: 'u010',
-    team: {
-      research: [
-        { id: 'u010', name: '冯十二', role: 'SPM', department: '项目管理部' },
-        { id: 'u011', name: '陈十三', role: 'TPM', department: '测试部' },
-        { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
-        { id: 'u012', name: '褚十四', role: '底软', department: '底软开发部' },
-        { id: 'u013', name: '卫十五', role: '系统', department: '系统集成部' },
-      ],
-      maintenance: [
-        { id: 'u001', name: '张三', role: 'SPM', department: '项目管理部' },
-        { id: 'u002', name: '李四', role: 'TPM', department: '测试部' },
-        { id: 'u004', name: '赵六', role: '底软', department: '底软开发部' },
-        { id: 'u005', name: '钱七', role: '系统', department: '系统集成部' },
-      ],
-    },
+    team: TEAM_APP004,
     plannedReviewDate: '2026-02-28',
     remark: 'X6650 Android14转维已全部完成，信息变更已归档',
     status: 'completed',
@@ -173,229 +323,95 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
 ];
 
 // ============================================================
-// Mock CheckList数据（app-001的部分数据）
+// app-001: X6870 — 资料录入进行中（各角色部分录入）
+// SPM(25条): 前5条已录入通过, 其余未录入
+// 测试(11条): 前3条已录入通过, 其余未录入
+// 底软(11条): 第1条暂存, 其余未录入
+// 系统(5条): 第1条已录入但AI检查失败, 其余未录入
+// ============================================================
+
+const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
+  // SPM: indices 0-24, 前5条(0-4)已录入通过
+  0: { entryContent: 'IPM系统确认所有版本计划已完成，上市时间均在当前时间之前\nhttps://feishu.cn/docs/x6870-ipm-project-screenshot', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  1: { entryContent: 'Super空间剩余3.2GB，规划2代升级预留', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  2: { entryContent: '项目计划已归档\nhttps://feishu.cn/docs/x6870-project-plan-archive', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  3: { entryContent: 'GMS包配置已与最新市场项目保持一致', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  4: { entryContent: 'Jenkins编译参数已更新\nhttps://jenkins.internal/job/x6870/', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  // 测试: indices 25-35, 前3条(25-27)已录入通过
+  25: { entryContent: '确认OTA版本链路完整，无断开情况\nhttps://feishu.cn/docs/x6870-ota-deployment-table', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  26: { entryContent: '确认历史版本已全市场推送\nhttps://feishu.cn/docs/x6870-ota-push-record', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  27: { entryContent: '测试用例库已交接\nhttps://feishu.cn/docs/x6870-test-cases', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  // 底软: indices 36-46, 第1条(36)暂存
+  36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed' },
+  // 系统: indices 47-51, 第1条(47)已录入但AI失败
+  47: { entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问', reviewStatus: 'not_reviewed' },
+};
+
+const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
+  // SPM评审要素: indices 0-4, 第1条已录入通过
+  0: { entryContent: 'IPM系统版本计划与实际上市时间一致，详见附件', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  // 底软评审要素: indices 5-9, 第1条已录入通过
+  5: { entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6870', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+};
+
+// ============================================================
+// app-002: X6768 — 资料全部录入完成，维护审核进行中
+// 所有checklist和review elements均已录入通过
+// SPM: 审核中(reviewing)
+// 测试: 已通过
+// 底软: 审核中(reviewing)
+// 系统: 已通过
+// ============================================================
+
+function makeApp002ClOverrides(): Record<number, ItemOverride> {
+  const ov: Record<number, ItemOverride> = {};
+  // SPM (0-24): all entered+passed, reviewStatus=reviewing
+  for (let i = 0; i <= 24; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  // 测试 (25-35): all entered+passed, reviewStatus=passed
+  for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  // 底软 (36-46): all entered+passed, reviewStatus=reviewing
+  for (let i = 36; i <= 46; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  // 系统 (47-51): all entered+passed, reviewStatus=passed
+  for (let i = 47; i <= 51; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  return ov;
+}
+
+function makeApp002ReOverrides(): Record<number, ItemOverride> {
+  const ov: Record<number, ItemOverride> = {};
+  // SPM (0-4): reviewing
+  for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  // 底软 (5-9): reviewing
+  for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  // 系统 (10-14): passed
+  for (let i = 10; i <= 14; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  return ov;
+}
+
+// ============================================================
+// app-004: X6650 — 全部完成
+// ============================================================
+
+function makeApp004Overrides(count: number): Record<number, ItemOverride> {
+  const ov: Record<number, ItemOverride> = {};
+  for (let i = 0; i < count; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  return ov;
+}
+
+// ============================================================
+// Generate complete items
 // ============================================================
 
 export const MOCK_CHECKLIST_ITEMS: CheckListItem[] = [
-  {
-    id: 'cli-001', applicationId: 'app-001', seq: 1,
-    type: '检查项', checkItem: 'IPM/SPUG项目信息完整无误、版本流程全部走完',
-    responsibleRole: 'SPM', entryPerson: '张三', entryPersonId: 'u001',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '通过IPM系统获取项目的所有版本计划的上市时间小于当前时间',
-    deliverables: [{ id: 'd001', name: 'IPM项目截图.png', url: 'https://feishu.cn/docs/x6870-ipm-project-screenshot', type: 'file' }],
-    entryContent: 'IPM系统确认所有版本计划已完成，上市时间均在当前时间之前',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
-  },
-  {
-    id: 'cli-002', applicationId: 'app-001', seq: 2,
-    type: '检查项', checkItem: 'Super空间大小：规划N代升级预留N/GB大小',
-    responsibleRole: 'SPM', entryPerson: '张三', entryPersonId: 'u001',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '检查文本是否为描述当前项目的Super空间剩余大小',
-    deliverables: [],
-    entryContent: 'Super空间剩余3.2GB，规划2代升级预留',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
-  },
-  {
-    id: 'cli-003', applicationId: 'app-001', seq: 3,
-    type: '检查项', checkItem: '项目计划已文控归档（交接时提供截图）',
-    responsibleRole: 'SPM', entryPerson: '孙八', entryPersonId: 'u006',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '检查是否包含项目计划表',
-    deliverables: [{ id: 'd003', name: '项目计划归档截图.png', url: 'https://feishu.cn/docs/x6870-project-plan-archive', type: 'file' }],
-    entryStatus: 'entered', aiCheckStatus: 'in_progress', reviewStatus: 'not_reviewed',
-    delegatedTo: ['u006'],
-  },
-  {
-    id: 'cli-004', applicationId: 'app-001', seq: 4,
-    type: '检查项', checkItem: 'Jenkins编译界面所有参数需更新到准确',
-    responsibleRole: 'SPM', entryPerson: '李四', entryPersonId: 'u002',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '确认给出的文本里包含Jenkins链接即可',
-    deliverables: [],
-    entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed',
-    delegatedTo: ['u002'],
-  },
-  {
-    id: 'cli-005', applicationId: 'app-001', seq: 5,
-    type: '检查项', checkItem: '确认OTA首版到最新量升版本中间无断开',
-    responsibleRole: '测试', entryPerson: '李四', entryPersonId: 'u002',
-    reviewPerson: '周九', reviewPersonId: 'u007',
-    aiCheckRule: '检查OTA部署表文档真实存在即可',
-    deliverables: [{ id: 'd005', name: 'OTA部署表.xlsx', url: 'https://feishu.cn/docs/x6870-ota-deployment-table', type: 'file' }],
-    entryContent: '确认OTA版本链路完整，无断开情况',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
-  },
-  {
-    id: 'cli-006', applicationId: 'app-001', seq: 6,
-    type: '交接资料', checkItem: '硬件散热方案/限流参数/CPU thermal参数',
-    responsibleRole: '底软', entryPerson: '赵六', entryPersonId: 'u004',
-    reviewPerson: '吴十', reviewPersonId: 'u008',
-    aiCheckRule: '检查文本包含温升/热设计相关文档链接',
-    deliverables: [],
-    entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed',
-  },
-  {
-    id: 'cli-007', applicationId: 'app-001', seq: 7,
-    type: '交接资料', checkItem: '系统集成编译配置文档',
-    responsibleRole: '系统', entryPerson: '钱七', entryPersonId: 'u005',
-    reviewPerson: '郑十一', reviewPersonId: 'u009',
-    aiCheckRule: '检查文本包含系统集成编译配置',
-    deliverables: [],
-    entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx',
-    entryStatus: 'entered', aiCheckStatus: 'failed',
-    aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问',
-    reviewStatus: 'not_reviewed',
-  },
-  // --- app-002 checklist items (维护审核阶段) ---
-  {
-    id: 'cli-201', applicationId: 'app-002', seq: 1,
-    type: '检查项', checkItem: 'IPM/SPUG项目信息完整无误、版本流程全部走完',
-    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
-    reviewPerson: '张三', reviewPersonId: 'u001',
-    aiCheckRule: '通过IPM系统获取项目的所有版本计划的上市时间小于当前时间',
-    deliverables: [{ id: 'd201', name: 'IPM项目截图.png', url: 'https://feishu.cn/docs/x6768-ipm-project-screenshot', type: 'file' }],
-    entryContent: 'IPM系统确认所有版本计划已完成',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
-  },
-  {
-    id: 'cli-202', applicationId: 'app-002', seq: 2,
-    type: '检查项', checkItem: '确认OTA首版到最新量升版本中间无断开',
-    responsibleRole: '测试', entryPerson: '陈十三', entryPersonId: 'u011',
-    reviewPerson: '李四', reviewPersonId: 'u002',
-    aiCheckRule: '检查OTA部署表文档真实存在',
-    deliverables: [{ id: 'd202', name: 'OTA部署表.xlsx', url: 'https://feishu.cn/docs/x6768-ota-deployment-table', type: 'file' }],
-    entryContent: '确认OTA版本链路完整',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
-  {
-    id: 'cli-203', applicationId: 'app-002', seq: 3,
-    type: '交接资料', checkItem: '硬件散热方案/限流参数/CPU thermal参数',
-    responsibleRole: '底软', entryPerson: '褚十四', entryPersonId: 'u012',
-    reviewPerson: '赵六', reviewPersonId: 'u004',
-    aiCheckRule: '检查文本包含温升/热设计相关文档链接',
-    deliverables: [{ id: 'd203', name: '散热方案文档.pdf', url: 'https://feishu.cn/docs/x6768-thermal-design-spec', type: 'file' }],
-    entryContent: '散热方案文档已交接：https://feishu.cn/docs/thermal',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
-  },
-  {
-    id: 'cli-204', applicationId: 'app-002', seq: 4,
-    type: '交接资料', checkItem: '系统集成编译配置文档',
-    responsibleRole: '系统', entryPerson: '卫十五', entryPersonId: 'u013',
-    reviewPerson: '钱七', reviewPersonId: 'u005',
-    aiCheckRule: '检查文本包含系统集成编译配置',
-    deliverables: [{ id: 'd204', name: '编译配置.md', url: 'https://feishu.cn/docs/x6768-build-config', type: 'file' }],
-    entryContent: '编译配置文档已更新完毕',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
-  // --- app-004 checklist items (已完成) ---
-  {
-    id: 'cli-401', applicationId: 'app-004', seq: 1,
-    type: '检查项', checkItem: 'IPM/SPUG项目信息完整无误、版本流程全部走完',
-    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
-    reviewPerson: '张三', reviewPersonId: 'u001',
-    aiCheckRule: '通过IPM系统获取项目的所有版本计划的上市时间小于当前时间',
-    deliverables: [{ id: 'd401', name: 'IPM项目截图.png', url: 'https://feishu.cn/docs/x6650-ipm-project-screenshot', type: 'file' }],
-    entryContent: 'IPM系统确认所有版本计划已完成，Android14所有版本均已上市',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
-  {
-    id: 'cli-402', applicationId: 'app-004', seq: 2,
-    type: '检查项', checkItem: '确认OTA首版到最新量升版本中间无断开',
-    responsibleRole: '测试', entryPerson: '陈十三', entryPersonId: 'u011',
-    reviewPerson: '李四', reviewPersonId: 'u002',
-    aiCheckRule: '检查OTA部署表文档真实存在',
-    deliverables: [{ id: 'd402', name: 'OTA部署表.xlsx', url: 'https://feishu.cn/docs/x6650-ota-deployment-table', type: 'file' }],
-    entryContent: '确认OTA版本从首版至量升最新版链路完整，无断开',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
+  ...generateChecklist('app-001', TEAM_APP001.research, TEAM_APP001.maintenance, APP001_CL_OVERRIDES),
+  ...generateChecklist('app-002', TEAM_APP002.research, TEAM_APP002.maintenance, makeApp002ClOverrides()),
+  // app-003: cancelled, no items needed (but generate empty for consistency)
+  ...generateChecklist('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(52)),
 ];
 
-// ============================================================
-// Mock评审要素数据
-// ============================================================
-
 export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
-  {
-    id: 'rei-001', applicationId: 'app-001', seq: 1,
-    standard: '项目管理', description: '查看项目版本计划与实际上市时间是否一致',
-    remark: '需提供IPM系统截图或链接',
-    responsibleRole: 'SPM', entryPerson: '张三', entryPersonId: 'u001',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '检查文本是否包含IPM系统截图或链接',
-    deliverables: [{ id: 'rd001', name: 'IPM版本计划.pdf', url: 'https://feishu.cn/docs/x6870-ipm-version-plan', type: 'file' }],
-    entryContent: 'IPM系统版本计划与实际上市时间一致，详见附件',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
-  },
-  {
-    id: 'rei-002', applicationId: 'app-001', seq: 2,
-    standard: '文档归档', description: '确认项目关键文档已归档到指定服务器',
-    remark: '包括项目计划、SPD、产品价值表等',
-    responsibleRole: 'SPM', entryPerson: '孙八', entryPersonId: 'u006',
-    reviewPerson: '孙八', reviewPersonId: 'u006',
-    aiCheckRule: '检查文本中是否包含归档服务器链接',
-    deliverables: [],
-    entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed',
-    delegatedTo: ['u006'],
-  },
-  {
-    id: 'rei-003', applicationId: 'app-001', seq: 3,
-    standard: '驱动完整性', description: '确认所有关键驱动模块已完整交接',
-    remark: '包括源码、文档、调试工具',
-    responsibleRole: '底软', entryPerson: '赵六', entryPersonId: 'u004',
-    reviewPerson: '吴十', reviewPersonId: 'u008',
-    aiCheckRule: '检查文本是否包含驱动源码仓库链接和技术文档',
-    deliverables: [],
-    entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6870',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed',
-  },
-  // --- app-002 review elements (维护审核阶段) ---
-  {
-    id: 'rei-201', applicationId: 'app-002', seq: 1,
-    standard: '项目管理', description: '查看项目版本计划与实际上市时间是否一致',
-    remark: '需提供IPM系统截图或链接',
-    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
-    reviewPerson: '张三', reviewPersonId: 'u001',
-    aiCheckRule: '检查文本是否包含IPM系统截图或链接',
-    deliverables: [{ id: 'rd201', name: 'IPM版本计划.pdf', url: 'https://feishu.cn/docs/x6768-ipm-version-plan', type: 'file' }],
-    entryContent: 'IPM系统版本计划与实际上市时间一致',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
-  },
-  {
-    id: 'rei-202', applicationId: 'app-002', seq: 2,
-    standard: '驱动完整性', description: '确认所有关键驱动模块已完整交接',
-    remark: '包括源码、文档、调试工具',
-    responsibleRole: '底软', entryPerson: '褚十四', entryPersonId: 'u012',
-    reviewPerson: '赵六', reviewPersonId: 'u004',
-    aiCheckRule: '检查文本是否包含驱动源码仓库链接',
-    deliverables: [],
-    entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6768',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing',
-  },
-  // --- app-004 review elements (已完成) ---
-  {
-    id: 'rei-401', applicationId: 'app-004', seq: 1,
-    standard: '项目管理', description: '查看项目版本计划与实际上市时间是否一致',
-    remark: '需提供IPM系统截图或链接',
-    responsibleRole: 'SPM', entryPerson: '冯十二', entryPersonId: 'u010',
-    reviewPerson: '张三', reviewPersonId: 'u001',
-    aiCheckRule: '检查文本是否包含IPM系统截图或链接',
-    deliverables: [{ id: 'rd401', name: 'IPM版本计划.pdf', url: 'https://feishu.cn/docs/x6650-ipm-version-plan', type: 'file' }],
-    entryContent: 'IPM系统版本计划与实际上市时间完全一致，Android14项目已全部结项',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
-  {
-    id: 'rei-402', applicationId: 'app-004', seq: 2,
-    standard: '驱动完整性', description: '确认所有关键驱动模块已完整交接',
-    remark: '包括源码、文档、调试工具',
-    responsibleRole: '底软', entryPerson: '褚十四', entryPersonId: 'u012',
-    reviewPerson: '赵六', reviewPersonId: 'u004',
-    aiCheckRule: '检查文本是否包含驱动源码仓库链接',
-    deliverables: [],
-    entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6650，文档已完整归档',
-    entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed',
-  },
+  ...generateReviewEls('app-001', TEAM_APP001.research, TEAM_APP001.maintenance, APP001_RE_OVERRIDES),
+  ...generateReviewEls('app-002', TEAM_APP002.research, TEAM_APP002.maintenance, makeApp002ReOverrides()),
+  ...generateReviewEls('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(15)),
 ];
 
 // ============================================================

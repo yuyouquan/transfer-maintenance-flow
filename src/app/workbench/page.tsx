@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Table, Input, Button, Tag, Space, Modal, Card, Typography, Badge, message, Segmented, Progress,
+  Table, Input, Button, Tag, Space, Modal, Card, Typography, Badge, message, Segmented, Progress, Tooltip,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, FileTextOutlined, EditOutlined,
@@ -15,8 +15,9 @@ import type { ColumnsType } from 'antd/es/table';
 import type {
   TransferApplication, TodoItem, PipelineStatus, PipelineNodeStatus, CloseReviewRow,
 } from '@/types';
-import { MOCK_APPLICATIONS, MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
+import { MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
 import { useCurrentUser } from '@/context/UserContext';
+import { useApplications } from '@/context/ApplicationContext';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -106,14 +107,6 @@ const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseRevi
     };
   });
 
-  const sqaMember = app.team.research.find((m) => m.role === 'SQA');
-  rows.push({
-    role: 'SQA' as CloseReviewRow['role'],
-    responsiblePerson: sqaMember?.name ?? '-',
-    conclusion: 'N/A',
-    comment: 'N/A',
-  });
-
   return rows;
 };
 
@@ -162,13 +155,55 @@ function StatCard({ title, count, icon, color, bgColor, active, onClick }: StatC
   );
 }
 
+// --- Determine user's node based on their role in the pipeline ---
+
+const TEAM_ROLE_TO_PIPELINE: Record<string, string> = {
+  SPM: 'SPM', TPM: '测试', '底软': '底软', '系统': '系统',
+};
+
+function getUserNodeInfo(
+  app: TransferApplication,
+  userId: string,
+): { nodeIndex: number; nodeStatus: PipelineNodeStatus; roleLabel?: string } {
+  // Check if user is in the research team (entry role)
+  const researchMember = app.team.research.find((m) => m.id === userId);
+  if (researchMember) {
+    const pipelineRole = TEAM_ROLE_TO_PIPELINE[researchMember.role];
+    if (pipelineRole) {
+      const rp = app.pipeline.roleProgress.find((r) => r.role === pipelineRole);
+      if (rp) {
+        // If entry not completed, user is at data entry node
+        if (rp.entryStatus !== 'completed') {
+          return { nodeIndex: 1, nodeStatus: app.pipeline.dataEntry, roleLabel: researchMember.role };
+        }
+      }
+    }
+  }
+
+  // Check if user is in the maintenance team (review role)
+  const maintenanceMember = app.team.maintenance.find((m) => m.id === userId);
+  if (maintenanceMember) {
+    const pipelineRole = TEAM_ROLE_TO_PIPELINE[maintenanceMember.role];
+    if (pipelineRole) {
+      const rp = app.pipeline.roleProgress.find((r) => r.role === pipelineRole);
+      if (rp) {
+        if (rp.reviewStatus !== 'completed') {
+          return { nodeIndex: 2, nodeStatus: app.pipeline.maintenanceReview };
+        }
+      }
+    }
+  }
+
+  // SQA or no specific role - show global progress
+  return { nodeIndex: getCurrentNodeIndex(app), nodeStatus: getCurrentNodeStatus(app) };
+}
+
 // --- Mini Pipeline ---
 
-function MiniPipeline({ app }: { readonly app: TransferApplication }) {
-  const currentIdx = getCurrentNodeIndex(app);
-  const status = getCurrentNodeStatus(app);
+function MiniPipeline({ app, userId }: { readonly app: TransferApplication; readonly userId: string }) {
+  const { nodeIndex, nodeStatus } = getUserNodeInfo(app, userId);
   const percent = getPipelinePercent(app);
-  const strokeColor = status === 'success' ? '#52c41a' : status === 'failed' ? '#ff4d4f' : '#1677ff';
+  const strokeColor = nodeStatus === 'success' ? '#52c41a' : nodeStatus === 'failed' ? '#ff4d4f' : '#1677ff';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
@@ -181,10 +216,10 @@ function MiniPipeline({ app }: { readonly app: TransferApplication }) {
         style={{ flex: 1, margin: 0 }}
       />
       <Tag
-        color={NODE_STATUS_CONFIG[status].color}
+        color={NODE_STATUS_CONFIG[nodeStatus].color}
         style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}
       >
-        {PIPELINE_NODES[currentIdx]}
+        {PIPELINE_NODES[nodeIndex]}
       </Tag>
     </div>
   );
@@ -195,6 +230,7 @@ function MiniPipeline({ app }: { readonly app: TransferApplication }) {
 export default function WorkbenchPage() {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
+  const { applications: allApplications } = useApplications();
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -208,14 +244,14 @@ export default function WorkbenchPage() {
 
   // Stats
   const stats = useMemo(() => ({
-    total: MOCK_APPLICATIONS.length,
-    inProgress: MOCK_APPLICATIONS.filter((a) => a.status === 'in_progress').length,
-    completed: MOCK_APPLICATIONS.filter((a) => a.status === 'completed').length,
-    cancelled: MOCK_APPLICATIONS.filter((a) => a.status === 'cancelled').length,
-  }), []);
+    total: allApplications.length,
+    inProgress: allApplications.filter((a) => a.status === 'in_progress').length,
+    completed: allApplications.filter((a) => a.status === 'completed').length,
+    cancelled: allApplications.filter((a) => a.status === 'cancelled').length,
+  }), [allApplications]);
 
   const filteredApplications = useMemo(() => {
-    let list = MOCK_APPLICATIONS;
+    let list: ReadonlyArray<TransferApplication> = allApplications;
     if (statusFilter !== 'all') {
       list = list.filter((app) => app.status === statusFilter);
     }
@@ -224,7 +260,7 @@ export default function WorkbenchPage() {
       list = list.filter((app) => app.projectName.toLowerCase().includes(keyword));
     }
     return list;
-  }, [searchKeyword, statusFilter]);
+  }, [allApplications, searchKeyword, statusFilter]);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -340,8 +376,17 @@ export default function WorkbenchPage() {
         if (record.status === 'cancelled') {
           return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>;
         }
-        return <MiniPipeline app={record} />;
+        return <MiniPipeline app={record} userId={currentUser.id} />;
       },
+    },
+    {
+      title: '计划评审日期', dataIndex: 'plannedReviewDate', key: 'plannedReviewDate', width: 120, align: 'center',
+      render: (text: string) => text || '-',
+    },
+    {
+      title: '备注', dataIndex: 'remark', key: 'remark', width: 160,
+      ellipsis: { showTitle: false },
+      render: (text: string) => text ? <Tooltip title={text}>{text}</Tooltip> : <Text type="secondary">-</Text>,
     },
     {
       title: '角色进度', key: 'roleProgress', width: 200,
@@ -518,7 +563,7 @@ export default function WorkbenchPage() {
                 size: 'small',
                 style: { marginRight: 16 },
               }}
-              scroll={{ x: 900 }}
+              scroll={{ x: 1200 }}
               size="middle"
               rowClassName={(record) =>
                 record.status === 'cancelled' ? 'row-cancelled' : ''

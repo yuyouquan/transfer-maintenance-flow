@@ -2,18 +2,17 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip, Upload,
+  Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip,
 } from 'antd';
 import {
   ArrowLeftOutlined, UploadOutlined, DownloadOutlined, CheckCircleOutlined,
   ClockCircleOutlined, ExclamationCircleOutlined, LoadingOutlined,
 } from '@ant-design/icons';
+import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
-import {
-  MOCK_APPLICATIONS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS, MOCK_USERS,
-  MOCK_BLOCK_TASKS,
-} from '@/mock';
+import { MOCK_USERS, MOCK_BLOCK_TASKS } from '@/mock';
+import { useApplications } from '@/context/ApplicationContext';
 import type {
   CheckListItem, ReviewElement, EntryStatus, AICheckStatus, ReviewStatus,
 } from '@/types';
@@ -52,32 +51,21 @@ const REVIEW_STATUS_MAP: Record<ReviewStatus, { label: string; color: string }> 
   rejected: { label: '不通过', color: 'error' },
 };
 
-// --- Helper to render deliverables ---
-
-function renderDeliverables(deliverables: ReadonlyArray<{ name: string; url: string }>) {
-  if (deliverables.length === 0) return <span style={{ color: '#999' }}>-</span>;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {deliverables.map((d) => (
-        <a key={d.name} href={d.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
-          {d.name}
-        </a>
-      ))}
-    </div>
-  );
-}
-
 // --- Main Page Component ---
 
 export default function DataEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = React.use(params);
   const router = useRouter();
   const { currentUser } = useCurrentUser();
+  const {
+    applications, checklistItems: allCtxChecklist, reviewElements: allCtxReview,
+    updateChecklistItems, updateReviewElements,
+  } = useApplications();
 
-  // Find application
+  // Find application from context
   const application = useMemo(
-    () => MOCK_APPLICATIONS.find((a) => a.id === id),
-    [id],
+    () => applications.find((a) => a.id === id),
+    [applications, id],
   );
 
   // Determine user's responsible role from the research team
@@ -88,12 +76,36 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
   }, [application, currentUser.id]);
 
-  // Local state for checklist items and review elements - filtered by user's role
-  const [checklistItems, setChecklistItems] = useState<ReadonlyArray<CheckListItem>>(
-    () => MOCK_CHECKLIST_ITEMS.filter((item) => item.applicationId === id),
+  // Derived from context - no local copy needed
+  const checklistItems = useMemo(
+    () => allCtxChecklist.filter((item) => item.applicationId === id),
+    [allCtxChecklist, id],
   );
-  const [reviewElements, setReviewElements] = useState<ReadonlyArray<ReviewElement>>(
-    () => MOCK_REVIEW_ELEMENTS.filter((item) => item.applicationId === id),
+  const reviewElements = useMemo(
+    () => allCtxReview.filter((item) => item.applicationId === id),
+    [allCtxReview, id],
+  );
+
+  // Wrappers to update context directly
+  const setChecklistItems = useCallback(
+    (updater: (prev: ReadonlyArray<CheckListItem>) => ReadonlyArray<CheckListItem>) => {
+      updateChecklistItems((all) => {
+        const others = all.filter((i) => i.applicationId !== id);
+        const current = all.filter((i) => i.applicationId === id);
+        return [...others, ...updater(current)];
+      });
+    },
+    [updateChecklistItems, id],
+  );
+  const setReviewElements = useCallback(
+    (updater: (prev: ReadonlyArray<ReviewElement>) => ReadonlyArray<ReviewElement>) => {
+      updateReviewElements((all) => {
+        const others = all.filter((i) => i.applicationId !== id);
+        const current = all.filter((i) => i.applicationId === id);
+        return [...others, ...updater(current)];
+      });
+    },
+    [updateReviewElements, id],
   );
 
   // Show items matching current user's role OR entryPersonId OR delegatedTo
@@ -295,14 +307,20 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const handleSubmitReview = useCallback(() => {
     Modal.confirm({
       title: '确认提交审核',
-      content: '提交后将进入维护审核阶段，确认提交？',
+      content: `提交后${userResponsibleRole ? `「${userResponsibleRole}」角色` : ''}将完成资料录入，进入维护审核阶段，确认提交？`,
       okText: '确认提交',
       cancelText: '取消',
       onOk: () => {
+        // Items are already entered+passed (canSubmitReview ensures this).
+        // The ApplicationContext auto-sync will compute roleProgress entryStatus
+        // as 'completed' and derive pipeline dataEntry / maintenanceReview.
+        // We just need to make sure all items for this role are marked 'entered'
+        // (they should be, but confirm state is persisted).
         message.success('已提交维护审核');
+        router.push(`/workbench/${id}`);
       },
     });
-  }, []);
+  }, [userResponsibleRole, router, id]);
 
   // --- AI check detail ---
 
@@ -351,8 +369,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
     },
     {
-      title: '交付件', key: 'deliverables', width: 120,
-      render: (_, record) => renderDeliverables(record.deliverables),
+      title: '交付件', key: 'deliverables', width: 180,
+      render: (_, record) => <EntryContentRenderer content={record.entryContent} />,
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
@@ -441,8 +459,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
     },
     {
-      title: '交付件', key: 'deliverables', width: 120,
-      render: (_, record) => renderDeliverables(record.deliverables),
+      title: '交付件', key: 'deliverables', width: 180,
+      render: (_, record) => <EntryContentRenderer content={record.entryContent} />,
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
@@ -671,20 +689,17 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         width={600}
         destroyOnClose
       >
-        <div style={{ marginBottom: 12 }}>
+        <div>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>录入内容</div>
           <TextArea
-            rows={6}
-            placeholder="请输入资料内容..."
+            rows={8}
+            placeholder="请输入资料内容，支持粘贴飞书文档链接、Samba路径或其他URL..."
             value={entryContent}
             onChange={(e) => setEntryContent(e.target.value)}
           />
-        </div>
-        <div>
-          <div style={{ marginBottom: 8, fontWeight: 500 }}>附件上传</div>
-          <Upload>
-            <Button icon={<UploadOutlined />}>选择文件</Button>
-          </Upload>
+          <div style={{ marginTop: 6, color: '#999', fontSize: 12 }}>
+            支持识别飞书文档链接、Samba服务器路径（\\server\path）及其他URL
+          </div>
         </div>
       </Modal>
 
