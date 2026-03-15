@@ -33,7 +33,7 @@ import type {
   PipelineNodeStatus,
   CloseReviewRow,
 } from '@/types';
-import { MOCK_APPLICATIONS, MOCK_TODOS } from '@/mock';
+import { MOCK_APPLICATIONS, MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
 import { useCurrentUser } from '@/context/UserContext';
 
 const { Title, Text } = Typography;
@@ -86,24 +86,55 @@ const hasAnyRoleEnteredReview = (app: TransferApplication): boolean => {
   );
 };
 
+const ROLE_DISPLAY_MAP: Record<string, string> = {
+  SPM: 'SPM',
+  '测试': 'TPM',
+  '底软': '底软',
+  '系统': '系统',
+};
+
 const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseReviewRow> => {
-  return app.pipeline.roleProgress.map((rp) => {
-    const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail' | '审核中'> = {
-      not_started: 'N/A',
-      in_progress: '审核中',
-      completed: 'PASS',
-      rejected: 'Fail',
-    };
+  const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail'> = {
+    not_started: 'N/A',
+    in_progress: 'N/A',
+    completed: 'PASS',
+    rejected: 'Fail',
+  };
+
+  // 4 pipeline roles → maintenance team responsible persons
+  const rows: CloseReviewRow[] = app.pipeline.roleProgress.map((rp) => {
     const maintenanceMember = app.team.maintenance.find(
       (m) => m.role === rp.role || (rp.role === '测试' && m.role === 'TPM')
     );
+
+    // For rejected items, find the review comment from checklist/review elements
+    let comment = 'N/A';
+    if (rp.reviewStatus === 'rejected') {
+      const rejectedItem = [
+        ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === app.id && i.responsibleRole === rp.role),
+        ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === app.id && i.responsibleRole === rp.role),
+      ].find((i) => i.reviewStatus === 'rejected' && i.reviewComment);
+      comment = rejectedItem?.reviewComment ?? '审核不通过';
+    }
+
     return {
-      role: rp.role,
+      role: (ROLE_DISPLAY_MAP[rp.role] ?? rp.role) as CloseReviewRow['role'],
       responsiblePerson: maintenanceMember?.name ?? '-',
       conclusion: conclusionMap[rp.reviewStatus] ?? 'N/A',
-      comment: '',
+      comment,
     };
   });
+
+  // Add SQA row - responsible person is research team SQA
+  const sqaMember = app.team.research.find((m) => m.role === 'SQA');
+  rows.push({
+    role: 'SQA' as CloseReviewRow['role'],
+    responsiblePerson: sqaMember?.name ?? '-',
+    conclusion: 'N/A',
+    comment: 'N/A',
+  });
+
+  return rows;
 };
 
 // --- Component ---
@@ -189,18 +220,25 @@ export default function WorkbenchPage() {
 
   // Close modal review table columns
   const closeReviewColumns: ColumnsType<CloseReviewRow> = [
-    { title: '角色', dataIndex: 'role', key: 'role', width: 100 },
-    { title: '负责人', dataIndex: 'responsiblePerson', key: 'responsiblePerson', width: 100 },
+    { title: '评审角色', dataIndex: 'role', key: 'role', width: 80, align: 'center' },
+    { title: '责任人', dataIndex: 'responsiblePerson', key: 'responsiblePerson', width: 80, align: 'center' },
     {
-      title: '评审结论', dataIndex: 'conclusion', key: 'conclusion', width: 100,
+      title: '评审结论', dataIndex: 'conclusion', key: 'conclusion', width: 90, align: 'center',
       render: (conclusion: CloseReviewRow['conclusion']) => {
         const config: Record<string, { color: string }> = {
-          PASS: { color: 'success' }, Fail: { color: 'error' }, 'N/A': { color: 'default' }, '审核中': { color: 'processing' },
+          PASS: { color: 'success' }, Fail: { color: 'error' }, 'N/A': { color: 'default' },
         };
         return <Tag color={config[conclusion]?.color ?? 'default'}>{conclusion}</Tag>;
       },
     },
-    { title: '备注', dataIndex: 'comment', key: 'comment', render: () => '-' },
+    {
+      title: '评审意见', dataIndex: 'comment', key: 'comment', width: 200,
+      render: (comment: string) => (
+        <Text type={comment === 'N/A' ? 'secondary' : undefined} style={{ fontSize: 13 }}>
+          {comment}
+        </Text>
+      ),
+    },
   ];
 
   // Main table columns

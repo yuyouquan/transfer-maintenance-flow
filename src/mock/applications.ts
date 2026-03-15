@@ -40,11 +40,11 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     pipeline: {
       projectInit: 'success',
       dataEntry: 'in_progress',
-      maintenanceReview: 'not_started',
+      maintenanceReview: 'in_progress',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
-        { role: '测试', entryStatus: 'completed', reviewStatus: 'not_started' },
+        { role: '测试', entryStatus: 'completed', reviewStatus: 'in_progress' },
         { role: '底软', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'rejected', reviewStatus: 'not_started' },
       ],

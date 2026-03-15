@@ -231,9 +231,9 @@ export interface TemplateVersion {
 // --- 关闭流水线评审状态 ---
 
 export interface CloseReviewRow {
-  readonly role: PipelineRole;
+  readonly role: PipelineRole | 'SQA' | 'TPM';
   readonly responsiblePerson: string;
-  readonly conclusion: 'N/A' | 'PASS' | 'Fail' | '审核中';
+  readonly conclusion: 'N/A' | 'PASS' | 'Fail';
   readonly comment: string;
 }
 

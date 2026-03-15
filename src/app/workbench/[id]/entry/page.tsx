@@ -96,16 +96,24 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     () => MOCK_REVIEW_ELEMENTS.filter((item) => item.applicationId === id),
   );
 
-  // Only show items matching current user's responsible role
+  // Show items matching current user's role OR delegated to current user
   const roleFilteredChecklist = useMemo(() => {
     if (!userResponsibleRole) return checklistItems;
-    return checklistItems.filter((item) => item.responsibleRole === userResponsibleRole);
-  }, [checklistItems, userResponsibleRole]);
+    return checklistItems.filter((item) =>
+      item.responsibleRole === userResponsibleRole
+      || item.entryPersonId === currentUser.id
+      || item.delegatedTo?.includes(currentUser.id)
+    );
+  }, [checklistItems, userResponsibleRole, currentUser.id]);
 
   const roleFilteredReviewElements = useMemo(() => {
     if (!userResponsibleRole) return reviewElements;
-    return reviewElements.filter((item) => item.responsibleRole === userResponsibleRole);
-  }, [reviewElements, userResponsibleRole]);
+    return reviewElements.filter((item) =>
+      item.responsibleRole === userResponsibleRole
+      || item.entryPersonId === currentUser.id
+      || item.delegatedTo?.includes(currentUser.id)
+    );
+  }, [reviewElements, userResponsibleRole, currentUser.id]);
 
   // Block tasks for rejected alert
   const blockTasks = useMemo(
@@ -129,10 +137,10 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const [entryModalTarget, setEntryModalTarget] = useState<{ id: string; tab: 'checklist' | 'review' } | null>(null);
   const [entryContent, setEntryContent] = useState('');
 
-  // Delegate modal
+  // Delegate modal - single select, reassign entry person
   const [delegateModalVisible, setDelegateModalVisible] = useState(false);
   const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review' } | null>(null);
-  const [delegatePersonIds, setDelegatePersonIds] = useState<string[]>([]);
+  const [delegatePersonId, setDelegatePersonId] = useState<string | undefined>(undefined);
 
   // AI check detail modal
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
@@ -235,40 +243,40 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   const openDelegateModal = useCallback((ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
     setDelegateTarget({ ids, tab });
-    setDelegatePersonIds([]);
+    setDelegatePersonId(undefined);
     setDelegateModalVisible(true);
   }, []);
 
   const handleDelegateConfirm = useCallback(() => {
-    if (!delegateTarget) return;
-    if (delegatePersonIds.length === 0) {
+    if (!delegateTarget || !delegatePersonId) {
       message.warning('请选择委派人员');
       return;
     }
 
+    const targetUser = MOCK_USERS.find((u) => u.id === delegatePersonId);
+    if (!targetUser) return;
+
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!delegateTarget.ids.includes(item.id)) return item;
+      return {
+        ...item,
+        entryPerson: targetUser.name,
+        entryPersonId: targetUser.id,
+        delegatedTo: [...new Set([...(item.delegatedTo ?? []), targetUser.id])],
+      };
+    };
+
     if (delegateTarget.tab === 'checklist') {
-      setChecklistItems((prev) =>
-        prev.map((item) =>
-          delegateTarget.ids.includes(item.id)
-            ? { ...item, delegatedTo: [...(item.delegatedTo ?? []), ...delegatePersonIds] }
-            : item,
-        ),
-      );
+      setChecklistItems((prev) => prev.map(updateItem));
     } else {
-      setReviewElements((prev) =>
-        prev.map((item) =>
-          delegateTarget.ids.includes(item.id)
-            ? { ...item, delegatedTo: [...(item.delegatedTo ?? []), ...delegatePersonIds] }
-            : item,
-        ),
-      );
+      setReviewElements((prev) => prev.map(updateItem));
     }
 
     setDelegateModalVisible(false);
     setDelegateTarget(null);
-    setDelegatePersonIds([]);
-    message.success('委派成功');
-  }, [delegateTarget, delegatePersonIds]);
+    setDelegatePersonId(undefined);
+    message.success(`已委派给 ${targetUser.name}，录入责任人已更新`);
+  }, [delegateTarget, delegatePersonId]);
 
   // --- Submit review ---
 
@@ -312,7 +320,15 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center',
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
+      render: (text: string, record: CheckListItem) => (
+        <Space size={4}>
+          <span>{text}</span>
+          {record.delegatedTo && record.delegatedTo.length > 0 && (
+            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
@@ -394,7 +410,15 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center',
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
+      render: (text: string, record: ReviewElement) => (
+        <Space size={4}>
+          <span>{text}</span>
+          {record.delegatedTo && record.delegatedTo.length > 0 && (
+            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
@@ -657,7 +681,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         onCancel={() => {
           setDelegateModalVisible(false);
           setDelegateTarget(null);
-          setDelegatePersonIds([]);
+          setDelegatePersonId(undefined);
         }}
         onOk={handleDelegateConfirm}
         okText="确认委派"
@@ -666,15 +690,14 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         destroyOnClose
       >
         <div style={{ marginBottom: 8, color: '#666' }}>
-          选择委派人员（可多选）
+          选择委派人员（将替换当前录入责任人）
         </div>
         <Select
-          mode="multiple"
           style={{ width: '100%' }}
           placeholder="选择委派人员"
-          value={delegatePersonIds}
-          onChange={setDelegatePersonIds}
-          options={MOCK_USERS.map((u) => ({
+          value={delegatePersonId}
+          onChange={setDelegatePersonId}
+          options={MOCK_USERS.filter((u) => u.id !== currentUser.id).map((u) => ({
             value: u.id,
             label: `${u.name} (${u.role} - ${u.department})`,
           }))}
