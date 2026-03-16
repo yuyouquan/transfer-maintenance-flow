@@ -116,6 +116,7 @@ function computeRoleReviewStatus(
   const roleItems = items.filter((i) => i.responsibleRole === role);
   if (roleItems.length === 0) return 'not_started';
 
+  const anyReviewing = roleItems.some((i) => i.reviewStatus === 'reviewing');
   const anyReviewed = roleItems.some(
     (i) => i.reviewStatus === 'passed' || i.reviewStatus === 'rejected',
   );
@@ -124,7 +125,7 @@ function computeRoleReviewStatus(
 
   if (allPassed) return 'completed';
   if (anyRejected) return 'rejected';
-  if (anyReviewed) return 'in_progress';
+  if (anyReviewed || anyReviewing) return 'in_progress';
   return 'not_started';
 }
 

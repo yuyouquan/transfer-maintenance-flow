@@ -63,4 +63,7 @@ export const MOCK_PROJECTS: ReadonlyArray<Project> = [
   { id: 'proj001', name: 'X6870_H1234(Android16)', code: 'X6870_H1234', team: TEAM_1 },
   { id: 'proj002', name: 'X6768_H5678(Android15)', code: 'X6768_H5678', team: TEAM_2 },
   { id: 'proj003', name: 'X6980_H9012(Android17)', code: 'X6980_H9012', team: TEAM_1 },
+  { id: 'proj005', name: 'X7100_H4567(Android17)', code: 'X7100_H4567', team: TEAM_1 },
+  { id: 'proj006', name: 'X7200_H7890(Android16)', code: 'X7200_H7890', team: TEAM_1 },
+  { id: 'proj007', name: 'X7300_H2345(Android15)', code: 'X7300_H2345', team: TEAM_2 },
 ];

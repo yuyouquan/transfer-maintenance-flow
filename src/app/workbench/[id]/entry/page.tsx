@@ -311,16 +311,29 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       okText: '确认提交',
       cancelText: '取消',
       onOk: () => {
-        // Items are already entered+passed (canSubmitReview ensures this).
-        // The ApplicationContext auto-sync will compute roleProgress entryStatus
-        // as 'completed' and derive pipeline dataEntry / maintenanceReview.
-        // We just need to make sure all items for this role are marked 'entered'
-        // (they should be, but confirm state is persisted).
+        // Update all items for this role: reviewStatus → 'reviewing'
+        // This triggers ApplicationContext auto-sync to compute roleProgress
+        if (userResponsibleRole) {
+          setChecklistItems((prev) =>
+            prev.map((item) =>
+              item.responsibleRole === userResponsibleRole
+                ? { ...item, reviewStatus: 'reviewing' as const }
+                : item,
+            ),
+          );
+          setReviewElements((prev) =>
+            prev.map((item) =>
+              item.responsibleRole === userResponsibleRole
+                ? { ...item, reviewStatus: 'reviewing' as const }
+                : item,
+            ),
+          );
+        }
         message.success('已提交维护审核');
         router.push(`/workbench/${id}`);
       },
     });
-  }, [userResponsibleRole, router, id]);
+  }, [userResponsibleRole, router, id, setChecklistItems, setReviewElements]);
 
   // --- AI check detail ---
 
