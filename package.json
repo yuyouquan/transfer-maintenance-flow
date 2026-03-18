@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .next",
+    "clean:all": "rm -rf .next node_modules",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
@@ -26,5 +30,8 @@
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
