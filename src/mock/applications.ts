@@ -137,6 +137,14 @@ const ENTERED_PASSED_REVIEWING: ItemOverride = {
   reviewStatus: 'reviewing',
 };
 
+const ENTERED_PASSED_REJECTED: ItemOverride = {
+  entryContent: '已录入，详见相关文档',
+  entryStatus: 'entered',
+  aiCheckStatus: 'passed',
+  reviewStatus: 'rejected',
+  reviewComment: '资料不完整，需要补充更多详细信息',
+};
+
 function rangeOverrides(
   start: number,
   end: number,
@@ -296,7 +304,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       maintenanceReview: 'in_progress',
       infoChange: 'not_started',
       roleProgress: [
-        { role: 'SPM', entryStatus: 'completed', reviewStatus: 'in_progress' },
+        { role: 'SPM', entryStatus: 'completed', reviewStatus: 'rejected' },
         { role: '测试', entryStatus: 'completed', reviewStatus: 'completed' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'in_progress' },
         { role: '系统', entryStatus: 'completed', reviewStatus: 'completed' },
@@ -498,8 +506,10 @@ const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
 
 function makeApp002ClOverrides(): Record<number, ItemOverride> {
   const ov: Record<number, ItemOverride> = {};
-  // SPM (0-24): all entered+passed, reviewStatus=reviewing
+  // SPM (0-24): 大部分reviewing, 第2、7条被拒绝
   for (let i = 0; i <= 24; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  ov[2] = { ...ENTERED_PASSED_REJECTED, reviewComment: '项目计划归档截图不清晰，请重新上传高清截图' };
+  ov[7] = { ...ENTERED_PASSED_REJECTED, reviewComment: 'OTA版本链路存在断链，缺少V2.1到V2.3的升级路径' };
   // 测试 (25-35): all entered+passed, reviewStatus=passed
   for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 底软 (36-46): all entered+passed, reviewStatus=reviewing
@@ -511,8 +521,9 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
 
 function makeApp002ReOverrides(): Record<number, ItemOverride> {
   const ov: Record<number, ItemOverride> = {};
-  // SPM (0-4): reviewing
+  // SPM (0-4): 大部分reviewing, 第1条被拒绝
   for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: '文档归档服务器链接已失效，需要重新归档到新的NAS路径' };
   // 底软 (5-9): reviewing
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   // 系统 (10-14): passed

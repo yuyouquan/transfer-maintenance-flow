@@ -438,10 +438,13 @@ export default function WorkbenchPage() {
         const showReview = isInProgress && isInReview && hasReviewRole;
 
         const anyRoleInReview = record.pipeline.roleProgress.some(
-          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
+          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed' || rp.reviewStatus === 'rejected'
+        );
+        const anyRoleRejected = record.pipeline.roleProgress.some(
+          (rp) => rp.reviewStatus === 'rejected'
         );
         const showClose = isInProgress && (
-          (!anyRoleInReview && isApplicant) || (anyRoleInReview && isSQA)
+          (!anyRoleInReview && isApplicant) || (anyRoleRejected && isSQA)
         );
 
         return (
