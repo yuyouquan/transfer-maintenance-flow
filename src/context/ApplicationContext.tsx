@@ -13,7 +13,7 @@ import { MOCK_REVIEW_ELEMENT_TEMPLATES } from '@/mock/review-element-template';
 // --- Role mapping for person assignment ---
 
 const ROLE_TO_TEAM_ROLE: Record<string, string> = {
-  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统',
+  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
 function findMemberByPipelineRole(
@@ -88,7 +88,7 @@ function generateReviewElements(
 
 // --- Compute roleProgress from items ---
 
-const PIPELINE_ROLES: ReadonlyArray<PipelineRole> = ['SPM', '测试', '底软', '系统'];
+const PIPELINE_ROLES: ReadonlyArray<PipelineRole> = ['SPM', '测试', '底软', '系统', '影像'];
 
 function computeRoleEntryStatus(
   items: ReadonlyArray<CheckListItem | ReviewElement>,

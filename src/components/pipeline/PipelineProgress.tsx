@@ -37,6 +37,7 @@ const ROLE_LABELS: Record<PipelineRole, string> = {
   '测试': '测试',
   '底软': '底软',
   '系统': '系统',
+  '影像': '影像',
 };
 
 export default function PipelineProgress({ pipeline, showRoleDots = true }: PipelineProgressProps) {

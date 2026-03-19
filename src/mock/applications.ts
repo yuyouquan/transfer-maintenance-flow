@@ -20,7 +20,7 @@ import { MOCK_REVIEW_ELEMENT_TEMPLATES } from './review-element-template';
 // ============================================================
 
 const ROLE_TO_TEAM_ROLE: Record<string, string> = {
-  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统',
+  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
 function findMemberByPipelineRole(
@@ -169,12 +169,14 @@ const TEAM_APP001 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u006', name: '孙八', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u007', name: '周九', role: 'TPM' as const, department: '测试部' },
     { id: 'u008', name: '吴十', role: '底软' as const, department: '底软开发部' },
     { id: 'u009', name: '郑十一', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -185,12 +187,14 @@ const TEAM_APP002 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -201,12 +205,14 @@ const TEAM_APP003 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u006', name: '孙八', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u007', name: '周九', role: 'TPM' as const, department: '测试部' },
     { id: 'u008', name: '吴十', role: '底软' as const, department: '底软开发部' },
     { id: 'u009', name: '郑十一', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -217,12 +223,14 @@ const TEAM_APP004 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -234,12 +242,14 @@ const TEAM_APP005 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u006', name: '孙八', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u007', name: '周九', role: 'TPM' as const, department: '测试部' },
     { id: 'u008', name: '吴十', role: '底软' as const, department: '底软开发部' },
     { id: 'u009', name: '郑十一', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -253,12 +263,14 @@ const TEAM_APP007 = {
     { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
+    { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
   ],
   maintenance: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
+    { id: 'u015', name: '沈十七', role: '影像' as const, department: '影像开发部' },
   ],
 };
 
@@ -283,6 +295,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'in_progress', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-10T10:00:00Z',
@@ -308,6 +321,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'completed', reviewStatus: 'completed' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'in_progress' },
         { role: '系统', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '影像', entryStatus: 'completed', reviewStatus: 'completed' },
       ],
     },
     createdAt: '2026-02-20T09:00:00Z',
@@ -334,6 +348,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'not_started', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'not_started', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'not_started', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-05T14:00:00Z',
@@ -359,6 +374,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'completed', reviewStatus: 'completed' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'completed' },
         { role: '系统', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '影像', entryStatus: 'completed', reviewStatus: 'completed' },
       ],
     },
     createdAt: '2026-01-15T09:00:00Z',
@@ -391,6 +407,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'in_progress', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-01T09:00:00Z',
@@ -423,6 +440,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'completed', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-02-25T10:00:00Z',
@@ -456,6 +474,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'in_progress', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-05T08:00:00Z',
@@ -469,6 +488,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
 // 测试(11条): 前3条已录入通过, 其余未录入
 // 底软(11条): 第1条暂存, 其余未录入
 // 系统(5条): 第1条已录入但AI检查失败, 其余未录入
+// 影像(8条): 全部未录入
 // ============================================================
 
 const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
@@ -516,6 +536,8 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
   for (let i = 36; i <= 46; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   // 系统 (47-51): all entered+passed, reviewStatus=passed
   for (let i = 47; i <= 51; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  // 影像 (52-59): all entered+passed, reviewStatus=passed
+  for (let i = 52; i <= 59; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   return ov;
 }
 
@@ -528,6 +550,8 @@ function makeApp002ReOverrides(): Record<number, ItemOverride> {
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   // 系统 (10-14): passed
   for (let i = 10; i <= 14; i++) ov[i] = ENTERED_PASSED_REVIEWED;
+  // 影像 (15-19): passed
+  for (let i = 15; i <= 19; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   return ov;
 }
 
@@ -642,7 +666,7 @@ export const MOCK_CHECKLIST_ITEMS: CheckListItem[] = [
   ...generateChecklist('app-001', TEAM_APP001.research, TEAM_APP001.maintenance, APP001_CL_OVERRIDES),
   ...generateChecklist('app-002', TEAM_APP002.research, TEAM_APP002.maintenance, makeApp002ClOverrides()),
   // app-003: cancelled, no items needed (but generate empty for consistency)
-  ...generateChecklist('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(52)),
+  ...generateChecklist('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(60)),
   ...generateChecklist('app-005', TEAM_APP005.research, TEAM_APP005.maintenance, APP005_CL_OVERRIDES),
   ...generateChecklist('app-006', TEAM_APP006.research, TEAM_APP006.maintenance, APP006_CL_OVERRIDES),
   ...generateChecklist('app-007', TEAM_APP007.research, TEAM_APP007.maintenance, APP007_CL_OVERRIDES),
@@ -651,7 +675,7 @@ export const MOCK_CHECKLIST_ITEMS: CheckListItem[] = [
 export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
   ...generateReviewEls('app-001', TEAM_APP001.research, TEAM_APP001.maintenance, APP001_RE_OVERRIDES),
   ...generateReviewEls('app-002', TEAM_APP002.research, TEAM_APP002.maintenance, makeApp002ReOverrides()),
-  ...generateReviewEls('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(15)),
+  ...generateReviewEls('app-004', TEAM_APP004.research, TEAM_APP004.maintenance, makeApp004Overrides(20)),
   ...generateReviewEls('app-005', TEAM_APP005.research, TEAM_APP005.maintenance, APP005_RE_OVERRIDES),
   ...generateReviewEls('app-006', TEAM_APP006.research, TEAM_APP006.maintenance, APP006_RE_OVERRIDES),
   ...generateReviewEls('app-007', TEAM_APP007.research, TEAM_APP007.maintenance, APP007_RE_OVERRIDES),
