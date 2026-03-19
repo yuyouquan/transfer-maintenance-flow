@@ -42,6 +42,8 @@ interface ItemOverride {
   readonly aiCheckResult?: string;
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
+  readonly delegatedTo?: ReadonlyArray<string>;
+  readonly entryPersonOverride?: { readonly id: string; readonly name: string };
 }
 
 function generateChecklist(
@@ -61,8 +63,8 @@ function generateChecklist(
       type: tpl.type,
       checkItem: tpl.checkItem,
       responsibleRole: tpl.responsibleRole,
-      entryPerson: entryPerson?.name ?? '-',
-      entryPersonId: entryPerson?.id ?? '',
+      entryPerson: ov?.entryPersonOverride?.name ?? entryPerson?.name ?? '-',
+      entryPersonId: ov?.entryPersonOverride?.id ?? entryPerson?.id ?? '',
       reviewPerson: reviewPerson?.name ?? '-',
       reviewPersonId: reviewPerson?.id ?? '',
       aiCheckRule: tpl.aiCheckRule,
@@ -73,6 +75,7 @@ function generateChecklist(
       aiCheckResult: ov?.aiCheckResult,
       reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
       reviewComment: ov?.reviewComment,
+      delegatedTo: ov?.delegatedTo,
     };
   });
 }
@@ -96,8 +99,8 @@ function generateReviewEls(
       description: tpl.description,
       remark: tpl.remark,
       responsibleRole: role,
-      entryPerson: entryPerson?.name ?? '-',
-      entryPersonId: entryPerson?.id ?? '',
+      entryPerson: ov?.entryPersonOverride?.name ?? entryPerson?.name ?? '-',
+      entryPersonId: ov?.entryPersonOverride?.id ?? entryPerson?.id ?? '',
       reviewPerson: reviewPerson?.name ?? '-',
       reviewPersonId: reviewPerson?.id ?? '',
       aiCheckRule: tpl.aiCheckRule,
@@ -108,6 +111,7 @@ function generateReviewEls(
       aiCheckResult: ov?.aiCheckResult,
       reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
       reviewComment: ov?.reviewComment,
+      delegatedTo: ov?.delegatedTo,
     };
   });
 }
@@ -502,8 +506,9 @@ const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
   25: { entryContent: '确认OTA版本链路完整，无断开情况\nhttps://feishu.cn/docs/x6870-ota-deployment-table', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
   26: { entryContent: '确认历史版本已全市场推送\nhttps://feishu.cn/docs/x6870-ota-push-record', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
   27: { entryContent: '测试用例库已交接\nhttps://feishu.cn/docs/x6870-test-cases', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
-  // 底软: indices 36-46, 第1条(36)暂存
-  36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed' },
+  // 底软: indices 36-46, 前2条委派给张三(u001)
+  36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
+  37: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
   // 系统: indices 47-51, 第1条(47)已录入但AI失败
   47: { entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问', reviewStatus: 'not_reviewed' },
 };
@@ -511,8 +516,9 @@ const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
 const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
   // SPM评审要素: indices 0-4, 第1条已录入通过
   0: { entryContent: 'IPM系统版本计划与实际上市时间一致，详见附件', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
-  // 底软评审要素: indices 5-9, 第1条已录入通过
+  // 底软评审要素: indices 5-9, 第1条已录入通过, 第2条委派给张三
   5: { entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6870', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  6: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
 };
 
 // ============================================================
