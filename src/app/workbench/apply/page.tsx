@@ -42,6 +42,7 @@ const ROLE_DISPLAY_NAMES: Readonly<Record<RoleType, string>> = {
   SQA: 'SQA',
   '底软': '底软集成开发代表',
   '系统': '系统集成开发代表',
+  '影像': '影像开发代表',
 };
 
 const ROLE_COLORS: Readonly<Record<RoleType, string>> = {
@@ -50,10 +51,11 @@ const ROLE_COLORS: Readonly<Record<RoleType, string>> = {
   SQA: '#059669',
   '底软': '#d97706',
   '系统': '#dc2626',
+  '影像': '#7c3aed',
 };
 
 // --- 对应角色顺序（不含SQA） ---
-const PAIRED_ROLES: ReadonlyArray<RoleType> = ['SPM', 'TPM', '底软', '系统'];
+const PAIRED_ROLES: ReadonlyArray<RoleType> = ['SPM', 'TPM', '底软', '系统', '影像'];
 
 // --- 转维指南卡片数据 ---
 
@@ -350,6 +352,7 @@ export default function ApplyPage() {
               { role: '测试', entryStatus: 'not_started', reviewStatus: 'not_started' },
               { role: '底软', entryStatus: 'not_started', reviewStatus: 'not_started' },
               { role: '系统', entryStatus: 'not_started', reviewStatus: 'not_started' },
+              { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
             ],
           },
           createdAt: now,

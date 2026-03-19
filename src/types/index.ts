@@ -23,10 +23,10 @@ export type ReviewStatus = 'not_reviewed' | 'reviewing' | 'passed' | 'rejected';
 export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled';
 
 /** 角色类型 */
-export type RoleType = 'SPM' | 'TPM' | 'SQA' | '底软' | '系统';
+export type RoleType = 'SPM' | 'TPM' | 'SQA' | '底软' | '系统' | '影像';
 
-/** 流水线角色（四个并行角色） */
-export type PipelineRole = 'SPM' | '测试' | '底软' | '系统';
+/** 流水线角色（五个并行角色） */
+export type PipelineRole = 'SPM' | '测试' | '底软' | '系统' | '影像';
 
 /** 团队类型 */
 export type TeamType = 'research' | 'maintenance';

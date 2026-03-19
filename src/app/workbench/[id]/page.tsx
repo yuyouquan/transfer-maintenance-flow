@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, useEffect, useCallback, use } from 'react';
 import {
   Card,
   Descriptions,
@@ -140,7 +140,7 @@ function renderEntryContent(record: { entryContent?: string }): React.ReactNode 
 // --- 团队成员卡片 ---
 
 const ROLE_SORT_ORDER: Record<string, number> = {
-  SPM: 1, TPM: 2, '底软': 3, '系统': 4, SQA: 5,
+  SPM: 1, TPM: 2, '底软': 3, '系统': 4, '影像': 4.5, SQA: 5,
 };
 
 const sortTeamMembers = (members: ReadonlyArray<TeamMember>): ReadonlyArray<TeamMember> =>
@@ -152,6 +152,7 @@ const ROLE_AVATAR_COLOR: Record<string, string> = {
   SQA: '#faad14',
   '底软': '#722ed1',
   '系统': '#eb2f96',
+  '影像': '#7c3aed',
 };
 
 function TeamMemberCard({ member }: { readonly member: TeamMember }) {
@@ -175,6 +176,113 @@ function TeamMemberCard({ member }: { readonly member: TeamMember }) {
         <div style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {member.role}{member.department ? ` · ${member.department}` : ''}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- 悬浮锚点导航 ---
+
+const ANCHOR_SECTIONS = [
+  { id: 'section-pipeline', label: '流水线', icon: '🔄' },
+  { id: 'section-info', label: '项目信息', icon: '📋' },
+  { id: 'section-team', label: '团队信息', icon: '👥' },
+  { id: 'section-checklist', label: 'CheckList', icon: '✅' },
+  { id: 'section-review', label: '评审要素', icon: '📝' },
+  { id: 'section-block', label: 'Block任务', icon: '🚫' },
+  { id: 'section-legacy', label: '遗留任务', icon: '📌' },
+  { id: 'section-history', label: '历史记录', icon: '🕐' },
+] as const;
+
+function FloatingAnchor() {
+  const [activeId, setActiveId] = useState(ANCHOR_SECTIONS[0].id);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY + 120;
+      let currentId = ANCHOR_SECTIONS[0].id;
+      for (const section of ANCHOR_SECTIONS) {
+        const el = document.getElementById(section.id);
+        if (el && el.offsetTop <= scrollY) {
+          currentId = section.id;
+        }
+      }
+      setActiveId(currentId);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const handleClick = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      window.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' });
+    }
+  }, []);
+
+  return (
+    <div style={{
+      position: 'sticky',
+      top: 80,
+      width: 140,
+      flexShrink: 0,
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '12px 0',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+        border: '1px solid #f0f0f0',
+      }}>
+        <div style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#999',
+          padding: '0 16px 8px',
+          borderBottom: '1px solid #f5f5f5',
+          marginBottom: 4,
+          letterSpacing: 1,
+        }}>
+          页面导航
+        </div>
+        {ANCHOR_SECTIONS.map((section) => {
+          const isActive = activeId === section.id;
+          return (
+            <div
+              key={section.id}
+              onClick={() => handleClick(section.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '7px 16px',
+                cursor: 'pointer',
+                fontSize: 13,
+                color: isActive ? '#4338ca' : '#666',
+                fontWeight: isActive ? 600 : 400,
+                background: isActive ? '#f0edff' : 'transparent',
+                borderLeft: isActive ? '3px solid #4338ca' : '3px solid transparent',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.background = '#fafafa';
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{section.icon}</span>
+              <span style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {section.label}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -543,124 +651,134 @@ export default function ApplicationDetailPage({
         />
       )}
 
-      {/* 5.1 项目流水线 */}
-      <Card style={{ marginBottom: 20 }}>
-        <PipelineProgress pipeline={application.pipeline} showRoleDots />
-      </Card>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        {/* 左侧主内容 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
 
-      {/* 5.2 项目基础信息 */}
-      <Card title="项目信息" style={{ marginBottom: 20 }}>
-        <Descriptions column={4} size="small" styles={{ label: { fontWeight: 500, color: '#666' } }}>
-          <Descriptions.Item label="项目名">{application.projectName}</Descriptions.Item>
-          <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
-          <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
-          <Descriptions.Item label="转维负责人">
-            {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
-          <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
-          <Descriptions.Item label="项目状态">
-            <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="备注">{application.remark || '-'}</Descriptions.Item>
-        </Descriptions>
-      </Card>
+          {/* 5.1 项目流水线 */}
+          <Card id="section-pipeline" style={{ marginBottom: 20 }}>
+            <PipelineProgress pipeline={application.pipeline} showRoleDots />
+          </Card>
 
-      {/* 5.3 团队信息：在研团队 + 维护团队 左右布局 */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-        <Card title="在研团队" size="small" style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {sortTeamMembers(application.team.research).map((member) => (
-              <TeamMemberCard key={member.id} member={member} />
-            ))}
+          {/* 5.2 项目基础信息 */}
+          <Card id="section-info" title="项目信息" style={{ marginBottom: 20 }}>
+            <Descriptions column={4} size="small" styles={{ label: { fontWeight: 500, color: '#666' } }}>
+              <Descriptions.Item label="项目名">{application.projectName}</Descriptions.Item>
+              <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
+              <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
+              <Descriptions.Item label="转维负责人">
+                {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
+              <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
+              <Descriptions.Item label="项目状态">
+                <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="备注">{application.remark || '-'}</Descriptions.Item>
+            </Descriptions>
+          </Card>
+
+          {/* 5.3 团队信息：在研团队 + 维护团队 左右布局 */}
+          <div id="section-team" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+            <Card title="在研团队" size="small" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {sortTeamMembers(application.team.research).map((member) => (
+                  <TeamMemberCard key={member.id} member={member} />
+                ))}
+              </div>
+            </Card>
+            <Card title="维护团队" size="small" style={{ flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {sortTeamMembers(application.team.maintenance).map((member) => (
+                  <TeamMemberCard key={member.id} member={member} />
+                ))}
+              </div>
+            </Card>
           </div>
-        </Card>
-        <Card title="维护团队" size="small" style={{ flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {sortTeamMembers(application.team.maintenance).map((member) => (
-              <TeamMemberCard key={member.id} member={member} />
-            ))}
-          </div>
-        </Card>
+
+          {/* 5.4 转维CheckList */}
+          <Card id="section-checklist" title="转维CheckList" style={{ marginBottom: 20 }}>
+            <Table<CheckListItem>
+              columns={checklistColumns}
+              dataSource={checklistItems}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              scroll={{ x: 1000 }}
+              locale={{ emptyText: '暂无检查项' }}
+            />
+          </Card>
+
+          {/* 5.5 转维要素评审列表 */}
+          <Card id="section-review" title="转维要素评审列表" style={{ marginBottom: 20 }}>
+            <Table<ReviewElement>
+              columns={reviewElementColumns}
+              dataSource={reviewElements}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              scroll={{ x: 1000 }}
+              locale={{ emptyText: '暂无评审要素' }}
+            />
+          </Card>
+
+          {/* 5.6 Block任务列表 */}
+          <Card id="section-block" title="Block任务列表" style={{ marginBottom: 20 }}>
+            <Table<BlockTask>
+              columns={blockTaskColumns}
+              dataSource={blockTasks}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              scroll={{ x: 900 }}
+              locale={{ emptyText: '暂无Block任务' }}
+            />
+          </Card>
+
+          {/* 5.7 遗留任务列表 */}
+          <Card id="section-legacy" title="遗留任务列表" style={{ marginBottom: 20 }}>
+            <Table<LegacyTask>
+              columns={legacyTaskColumns}
+              dataSource={legacyTasks}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              scroll={{ x: 900 }}
+              locale={{ emptyText: '暂无遗留任务' }}
+            />
+          </Card>
+
+          {/* 5.8 历史记录 */}
+          <Card id="section-history" title="历史记录" style={{ marginBottom: 20 }}>
+            {historyRecords.length === 0 ? (
+              <Empty description="暂无历史记录" />
+            ) : (
+              <Timeline
+                items={historyRecords.map((record) => ({
+                  dot: getTimelineIcon(record.action),
+                  children: (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 500 }}>{record.action}</span>
+                        <span style={{ color: '#888', fontSize: 12 }}>
+                          {record.operator} - {new Date(record.timestamp).toLocaleString('zh-CN')}
+                        </span>
+                      </div>
+                      <div style={{ color: '#555', fontSize: 13, marginTop: 4 }}>
+                        {record.detail}
+                      </div>
+                    </div>
+                  ),
+                }))}
+              />
+            )}
+          </Card>
+
+        </div>
+
+        {/* 右侧悬浮锚点导航 */}
+        <FloatingAnchor />
       </div>
-
-      {/* 5.4 转维CheckList */}
-      <Card title="转维CheckList" style={{ marginBottom: 20 }}>
-        <Table<CheckListItem>
-          columns={checklistColumns}
-          dataSource={checklistItems}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 1000 }}
-          locale={{ emptyText: '暂无检查项' }}
-        />
-      </Card>
-
-      {/* 5.5 转维要素评审列表 */}
-      <Card title="转维要素评审列表" style={{ marginBottom: 20 }}>
-        <Table<ReviewElement>
-          columns={reviewElementColumns}
-          dataSource={reviewElements}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 1000 }}
-          locale={{ emptyText: '暂无评审要素' }}
-        />
-      </Card>
-
-      {/* 5.6 Block任务列表 */}
-      <Card title="Block任务列表" style={{ marginBottom: 20 }}>
-        <Table<BlockTask>
-          columns={blockTaskColumns}
-          dataSource={blockTasks}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 900 }}
-          locale={{ emptyText: '暂无Block任务' }}
-        />
-      </Card>
-
-      {/* 5.7 遗留任务列表 */}
-      <Card title="遗留任务列表" style={{ marginBottom: 20 }}>
-        <Table<LegacyTask>
-          columns={legacyTaskColumns}
-          dataSource={legacyTasks}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 900 }}
-          locale={{ emptyText: '暂无遗留任务' }}
-        />
-      </Card>
-
-      {/* 5.8 历史记录 */}
-      <Card title="历史记录" style={{ marginBottom: 20 }}>
-        {historyRecords.length === 0 ? (
-          <Empty description="暂无历史记录" />
-        ) : (
-          <Timeline
-            items={historyRecords.map((record) => ({
-              dot: getTimelineIcon(record.action),
-              children: (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 500 }}>{record.action}</span>
-                    <span style={{ color: '#888', fontSize: 12 }}>
-                      {record.operator} - {new Date(record.timestamp).toLocaleString('zh-CN')}
-                    </span>
-                  </div>
-                  <div style={{ color: '#555', fontSize: 13, marginTop: 4 }}>
-                    {record.detail}
-                  </div>
-                </div>
-              ),
-            }))}
-          />
-        )}
-      </Card>
 
       {/* 结果详情弹窗 */}
       <Modal

@@ -25,6 +25,7 @@ const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
   TPM: '测试',
   '底软': '底软',
   '系统': '系统',
+  '影像': '影像',
 };
 
 const { TextArea } = Input;

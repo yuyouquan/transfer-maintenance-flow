@@ -41,7 +41,7 @@ const TODO_TYPE_CONFIG: Record<string, { color: string; label: string; icon: Rea
 };
 
 const ROLE_DISPLAY_MAP: Record<string, string> = {
-  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统',
+  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
 type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled';
@@ -158,7 +158,7 @@ function StatCard({ title, count, icon, color, bgColor, active, onClick }: StatC
 // --- Determine user's node based on their role in the pipeline ---
 
 const TEAM_ROLE_TO_PIPELINE: Record<string, string> = {
-  SPM: 'SPM', TPM: '测试', '底软': '底软', '系统': '系统',
+  SPM: 'SPM', TPM: '测试', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
 function getUserNodeInfo(
@@ -420,7 +420,7 @@ export default function WorkbenchPage() {
         const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
         const hasEntryRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.entryStatus === 'completed' && rp.reviewStatus !== 'rejected') return false;
-          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
+          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
           return record.team.research.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
         });
         const isDelegatedEntry = [
@@ -432,7 +432,7 @@ export default function WorkbenchPage() {
         const isInReview = record.pipeline.maintenanceReview === 'in_progress';
         const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.reviewStatus !== 'in_progress') return false;
-          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统' };
+          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
           return record.team.maintenance.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
         });
         const showReview = isInProgress && isInReview && hasReviewRole;

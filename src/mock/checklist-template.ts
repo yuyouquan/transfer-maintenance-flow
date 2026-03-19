@@ -64,4 +64,14 @@ export const MOCK_CHECKLIST_TEMPLATES: ReadonlyArray<CheckListTemplate> = [
   { id: 'cl-050', type: '检查项', checkItem: '系统级别已知问题清单', responsibleRole: '系统', entryRole: '在研系统集成开发代表', reviewRole: '维护系统集成开发代表', aiCheckRule: '检查文本包含系统已知问题清单' },
   { id: 'cl-051', type: '交接资料', checkItem: 'Framework定制化修改清单', responsibleRole: '系统', entryRole: '在研系统集成开发代表', reviewRole: '维护系统集成开发代表', aiCheckRule: '检查文本包含Framework修改清单' },
   { id: 'cl-052', type: '交接资料', checkItem: '系统性能优化方案', responsibleRole: '系统', entryRole: '在研系统集成开发代表', reviewRole: '维护系统集成开发代表', aiCheckRule: '检查文本包含系统性能优化方案' },
+
+  // === 影像角色 (8条) ===
+  { id: 'cl-053', type: '交接资料', checkItem: 'ISP调试参数及配置文档', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含ISP调试参数配置文档链接' },
+  { id: 'cl-054', type: '交接资料', checkItem: '摄像头标定数据及工具', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含摄像头标定数据和工具文档链接' },
+  { id: 'cl-055', type: '交接资料', checkItem: '影像算法参数及调优文档', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含影像算法参数文档链接' },
+  { id: 'cl-056', type: '检查项', checkItem: '图像质量测试报告确认', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含图像质量测试报告' },
+  { id: 'cl-057', type: '交接资料', checkItem: '摄像头驱动源码及编译文档', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含摄像头驱动源码仓库链接' },
+  { id: 'cl-058', type: '检查项', checkItem: '影像功能兼容性列表', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含影像功能兼容性列表' },
+  { id: 'cl-059', type: '交接资料', checkItem: '影像调试工具和方法文档', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含影像调试工具文档' },
+  { id: 'cl-060', type: '检查项', checkItem: '影像已知问题清单', responsibleRole: '影像', entryRole: '在研影像开发代表', reviewRole: '维护影像开发代表', aiCheckRule: '检查文本包含影像已知问题清单' },
 ];
