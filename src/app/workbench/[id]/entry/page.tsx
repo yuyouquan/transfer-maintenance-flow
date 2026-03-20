@@ -161,9 +161,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [id],
   );
 
-  // Filter states
-  const [entryStatusFilter, setEntryStatusFilter] = useState<string>('all');
-  const [aiCheckStatusFilter, setAiCheckStatusFilter] = useState<string>('all');
 
   // Tab
   const [activeTab, setActiveTab] = useState<string>('checklist');
@@ -186,41 +183,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
   const [aiDetailContent, setAiDetailContent] = useState('');
 
-  // --- Filtered data (own role) ---
-
-  const filteredChecklist = useMemo(() => {
-    return ownRoleChecklist.filter((item) => {
-      if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
-      if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
-      return true;
-    });
-  }, [ownRoleChecklist, entryStatusFilter, aiCheckStatusFilter]);
-
-  const filteredReviewElements = useMemo(() => {
-    return ownRoleReviewElements.filter((item) => {
-      if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
-      if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
-      return true;
-    });
-  }, [ownRoleReviewElements, entryStatusFilter, aiCheckStatusFilter]);
-
-  // --- Filtered data (delegated) ---
-
-  const filteredDelegatedChecklist = useMemo(() => {
-    return delegatedChecklist.filter((item) => {
-      if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
-      if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
-      return true;
-    });
-  }, [delegatedChecklist, entryStatusFilter, aiCheckStatusFilter]);
-
-  const filteredDelegatedReviewElements = useMemo(() => {
-    return delegatedReviewElements.filter((item) => {
-      if (entryStatusFilter !== 'all' && item.entryStatus !== entryStatusFilter) return false;
-      if (aiCheckStatusFilter !== 'all' && item.aiCheckStatus !== aiCheckStatusFilter) return false;
-      return true;
-    });
-  }, [delegatedReviewElements, entryStatusFilter, aiCheckStatusFilter]);
 
   // --- canSubmitReview: only checks own role items for effectiveRole ---
 
@@ -418,6 +380,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      filters: [
+        { text: '未录入', value: 'not_entered' },
+        { text: '暂存', value: 'draft' },
+        { text: '已录入', value: 'entered' },
+      ],
+      onFilter: (value, record) => record.entryStatus === value,
       render: (_, record) => {
         const s = ENTRY_STATUS_MAP[record.entryStatus];
         return <Tag color={s.color}>{s.label}</Tag>;
@@ -425,6 +393,13 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: 'AI检查状态', key: 'aiCheckStatus', width: 100, align: 'center',
+      filters: [
+        { text: '未开始', value: 'not_started' },
+        { text: '检查中', value: 'in_progress' },
+        { text: '通过', value: 'passed' },
+        { text: '不通过', value: 'failed' },
+      ],
+      onFilter: (value, record) => record.aiCheckStatus === value,
       render: (_, record) => {
         const s = AI_CHECK_STATUS_MAP[record.aiCheckStatus];
         return (
@@ -509,6 +484,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      filters: [
+        { text: '未录入', value: 'not_entered' },
+        { text: '暂存', value: 'draft' },
+        { text: '已录入', value: 'entered' },
+      ],
+      onFilter: (value, record) => record.entryStatus === value,
       render: (_, record) => {
         const s = ENTRY_STATUS_MAP[record.entryStatus];
         return <Tag color={s.color}>{s.label}</Tag>;
@@ -516,6 +497,13 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: 'AI检查状态', key: 'aiCheckStatus', width: 100, align: 'center',
+      filters: [
+        { text: '未开始', value: 'not_started' },
+        { text: '检查中', value: 'in_progress' },
+        { text: '通过', value: 'passed' },
+        { text: '不通过', value: 'failed' },
+      ],
+      onFilter: (value, record) => record.aiCheckStatus === value,
       render: (_, record) => {
         const s = AI_CHECK_STATUS_MAP[record.aiCheckStatus];
         return (
@@ -628,32 +616,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
         {/* Top controls row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <Space size={12} wrap>
-            <Select
-              style={{ width: 160 }}
-              value={entryStatusFilter}
-              onChange={setEntryStatusFilter}
-              options={[
-                { value: 'all', label: '全部录入状态' },
-                { value: 'not_entered', label: '未录入' },
-                { value: 'draft', label: '暂存' },
-                { value: 'entered', label: '已录入' },
-              ]}
-            />
-            <Select
-              style={{ width: 180 }}
-              value={aiCheckStatusFilter}
-              onChange={setAiCheckStatusFilter}
-              options={[
-                { value: 'all', label: '全部AI检查状态' },
-                { value: 'not_started', label: '未开始' },
-                { value: 'in_progress', label: '检查中' },
-                { value: 'passed', label: '通过' },
-                { value: 'failed', label: '不通过' },
-              ]}
-            />
-          </Space>
-
           <Space size={8}>
             {effectiveRole && (
               <Tooltip title={canSubmitReview ? `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核` : `需要「${effectiveRole}」角色所有录入项的录入状态和AI检查都通过后才能提交`}>
@@ -689,7 +651,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                   <Table<CheckListItem>
                     rowKey="id"
                     columns={checklistColumns}
-                    dataSource={filteredChecklist as CheckListItem[]}
+                    dataSource={ownRoleChecklist as CheckListItem[]}
                     pagination={false}
                     scroll={{ x: 1600 }}
                     size="middle"
@@ -715,7 +677,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                           <Table<CheckListItem>
                             rowKey="id"
                             columns={checklistColumns}
-                            dataSource={filteredDelegatedChecklist as CheckListItem[]}
+                            dataSource={delegatedChecklist as CheckListItem[]}
                             pagination={false}
                             scroll={{ x: 1600 }}
                             size="middle"
@@ -735,7 +697,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                   <Table<ReviewElement>
                     rowKey="id"
                     columns={reviewElementColumns}
-                    dataSource={filteredReviewElements as ReviewElement[]}
+                    dataSource={ownRoleReviewElements as ReviewElement[]}
                     pagination={false}
                     scroll={{ x: 1700 }}
                     size="middle"
@@ -761,7 +723,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                           <Table<ReviewElement>
                             rowKey="id"
                             columns={reviewElementColumns}
-                            dataSource={filteredDelegatedReviewElements as ReviewElement[]}
+                            dataSource={delegatedReviewElements as ReviewElement[]}
                             pagination={false}
                             scroll={{ x: 1700 }}
                             size="middle"

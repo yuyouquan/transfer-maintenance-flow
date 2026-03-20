@@ -371,6 +371,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      filters: [
+        { text: '未录入', value: 'not_entered' },
+        { text: '暂存', value: 'draft' },
+        { text: '已录入', value: 'entered' },
+      ],
+      onFilter: (value, record) => record.entryStatus === String(value),
       render: (_: unknown, record: CheckListItem) => {
         const s = ENTRY_STATUS_MAP[record.entryStatus];
         return <Tag color={s?.color}>{s?.label ?? record.entryStatus}</Tag>;
@@ -378,6 +384,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: 'AI检查', key: 'aiCheckStatus', width: 90, align: 'center',
+      filters: [
+        { text: '-', value: 'not_started' },
+        { text: '检查中', value: 'in_progress' },
+        { text: '通过', value: 'passed' },
+        { text: '不通过', value: 'failed' },
+      ],
+      onFilter: (value, record) => record.aiCheckStatus === String(value),
       render: (_: unknown, record: CheckListItem) => {
         const s = AI_STATUS_MAP[record.aiCheckStatus];
         return <Tag color={s?.color}>{s?.label ?? record.aiCheckStatus}</Tag>;
@@ -442,6 +455,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: '录入状态', key: 'entryStatus', width: 90, align: 'center',
+      filters: [
+        { text: '未录入', value: 'not_entered' },
+        { text: '暂存', value: 'draft' },
+        { text: '已录入', value: 'entered' },
+      ],
+      onFilter: (value, record) => record.entryStatus === String(value),
       render: (_: unknown, record: ReviewElement) => {
         const s = ENTRY_STATUS_MAP[record.entryStatus];
         return <Tag color={s?.color}>{s?.label ?? record.entryStatus}</Tag>;
@@ -449,6 +468,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: 'AI检查', key: 'aiCheckStatus', width: 90, align: 'center',
+      filters: [
+        { text: '-', value: 'not_started' },
+        { text: '检查中', value: 'in_progress' },
+        { text: '通过', value: 'passed' },
+        { text: '不通过', value: 'failed' },
+      ],
+      onFilter: (value, record) => record.aiCheckStatus === String(value),
       render: (_: unknown, record: ReviewElement) => {
         const s = AI_STATUS_MAP[record.aiCheckStatus];
         return <Tag color={s?.color}>{s?.label ?? record.aiCheckStatus}</Tag>;
