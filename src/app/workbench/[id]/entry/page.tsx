@@ -614,26 +614,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
       {/* Main card */}
       <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-        {/* Top controls row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <Space size={8}>
-            {effectiveRole && (
-              <Tooltip title={canSubmitReview ? `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核` : `需要「${effectiveRole}」角色所有录入项的录入状态和AI检查都通过后才能提交`}>
-                <Button type="primary" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
-                  提交{effectiveRole}审核
-                </Button>
-              </Tooltip>
-            )}
-            {selectedKeys.length > 0 && (
-              <Button onClick={() => openDelegateModal(selectedKeys as string[], currentTab)}>
-                全部委派 ({selectedKeys.length})
-              </Button>
-            )}
-            <Button icon={<UploadOutlined />}>导入</Button>
-            <Button icon={<DownloadOutlined />}>导出</Button>
-          </Space>
-        </div>
-
         {/* Tabs: 转维材料 / 评审要素 */}
         <Tabs
           activeKey={activeTab}
@@ -642,6 +622,24 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
             setSelectedChecklistKeys([]);
             setSelectedReviewKeys([]);
           }}
+          tabBarExtraContent={
+            <Space size={8}>
+              {selectedKeys.length > 0 && (
+                <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], currentTab)}>
+                  全部委派 ({selectedKeys.length})
+                </Button>
+              )}
+              {effectiveRole && (
+                <Tooltip title={canSubmitReview ? `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核` : `需要「${effectiveRole}」角色所有录入项的录入状态和AI检查都通过后才能提交`}>
+                  <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
+                    提交{effectiveRole}审核
+                  </Button>
+                </Tooltip>
+              )}
+              <Button icon={<UploadOutlined />} size="small">导入</Button>
+              <Button icon={<DownloadOutlined />} size="small">导出</Button>
+            </Space>
+          }
           items={[
             {
               key: 'checklist',
