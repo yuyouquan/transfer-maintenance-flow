@@ -19,6 +19,7 @@ import type {
 import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
+import { useColumnSearch } from '@/components/shared/useColumnSearch';
 
 // Map team role to checklist responsibleRole
 const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
@@ -337,6 +338,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- User options for selectors ---
   const userOptions = MOCK_USERS.map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id }));
 
+  // --- Column search ---
+  const { getColumnSearchProps: getClSearchProps } = useColumnSearch<CheckListItem>();
+  const { getColumnSearchProps: getReSearchProps } = useColumnSearch<ReviewElement>();
+
   // --- Checklist columns ---
   const checklistColumns: ColumnsType<CheckListItem> = [
     { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
@@ -345,6 +350,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 260,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+      ...getClSearchProps('checkItem'),
     },
     { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
@@ -410,6 +416,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       title: '说明', dataIndex: 'description', key: 'description', width: 220,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+      ...getReSearchProps('description'),
     },
     {
       title: '备注', dataIndex: 'remark', key: 'remark', width: 140,

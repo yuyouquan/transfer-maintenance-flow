@@ -9,6 +9,7 @@ import {
   ClockCircleOutlined, ExclamationCircleOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
+import { useColumnSearch } from '@/components/shared/useColumnSearch';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import { MOCK_USERS, MOCK_BLOCK_TASKS } from '@/mock';
@@ -370,6 +371,10 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     setAiDetailModalVisible(true);
   }, []);
 
+  // --- Column search ---
+  const { getColumnSearchProps: getClSearchProps } = useColumnSearch<CheckListItem>();
+  const { getColumnSearchProps: getReSearchProps } = useColumnSearch<ReviewElement>();
+
   // --- Table columns for checklist ---
 
   const checklistColumns: ColumnsType<CheckListItem> = useMemo(() => [
@@ -383,6 +388,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 260,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+      ...getClSearchProps('checkItem'),
     },
     {
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
@@ -453,7 +459,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         </Space>
       ),
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps]);
 
   // --- Table columns for review elements ---
 
@@ -468,6 +474,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '说明', dataIndex: 'description', key: 'description', width: 220,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
+      ...getReSearchProps('description'),
     },
     {
       title: '备注', dataIndex: 'remark', key: 'remark', width: 160,
@@ -543,7 +550,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         </Space>
       ),
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps]);
 
   // --- Render ---
 

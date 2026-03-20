@@ -195,12 +195,12 @@ const ANCHOR_SECTIONS = [
 ] as const;
 
 function FloatingAnchor() {
-  const [activeId, setActiveId] = useState(ANCHOR_SECTIONS[0].id);
+  const [activeId, setActiveId] = useState<(typeof ANCHOR_SECTIONS)[number]['id']>(ANCHOR_SECTIONS[0].id);
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY + 120;
-      let currentId = ANCHOR_SECTIONS[0].id;
+      let currentId: (typeof ANCHOR_SECTIONS)[number]['id'] = ANCHOR_SECTIONS[0].id;
       for (const section of ANCHOR_SECTIONS) {
         const el = document.getElementById(section.id);
         if (el && el.offsetTop <= scrollY) {
