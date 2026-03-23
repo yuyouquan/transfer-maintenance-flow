@@ -346,6 +346,7 @@ export default function ApplyPage() {
             projectInit: 'success',
             dataEntry: 'in_progress',
             maintenanceReview: 'not_started',
+            sqaReview: 'not_started',
             infoChange: 'not_started',
             roleProgress: [
               { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },

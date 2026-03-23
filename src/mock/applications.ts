@@ -293,6 +293,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
@@ -319,6 +320,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'in_progress',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'rejected' },
@@ -346,6 +348,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'not_started',
       maintenanceReview: 'not_started',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },
@@ -372,6 +375,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'success',
+      sqaReview: 'success',
       infoChange: 'success',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' },
@@ -405,6 +409,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'not_started' },
@@ -438,6 +443,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
@@ -472,6 +478,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
+      sqaReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'not_started' },
@@ -483,6 +490,37 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     },
     createdAt: '2026-03-05T08:00:00Z',
     updatedAt: '2026-03-15T14:00:00Z',
+  },
+  // ============================================================
+  // app-008: X7400 — 所有角色审核通过，SQA审核进行中
+  // 用于测试SQA审核流程
+  // ============================================================
+  {
+    id: 'app-008',
+    projectId: 'proj008',
+    projectName: 'X7400_H6789(Android16)',
+    applicant: '张三',
+    applicantId: 'u001',
+    team: TEAM_APP005,
+    plannedReviewDate: '2026-04-25',
+    remark: 'X7400项目维护审核已全部通过，进入SQA审核阶段',
+    status: 'in_progress',
+    pipeline: {
+      projectInit: 'success',
+      dataEntry: 'success',
+      maintenanceReview: 'success',
+      sqaReview: 'in_progress',
+      infoChange: 'not_started',
+      roleProgress: [
+        { role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '测试', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '底软', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '系统', entryStatus: 'completed', reviewStatus: 'completed' },
+        { role: '影像', entryStatus: 'completed', reviewStatus: 'completed' },
+      ],
+    },
+    createdAt: '2026-02-10T09:00:00Z',
+    updatedAt: '2026-03-18T10:00:00Z',
   },
 ];
 
@@ -676,6 +714,7 @@ export const MOCK_CHECKLIST_ITEMS: CheckListItem[] = [
   ...generateChecklist('app-005', TEAM_APP005.research, TEAM_APP005.maintenance, APP005_CL_OVERRIDES),
   ...generateChecklist('app-006', TEAM_APP006.research, TEAM_APP006.maintenance, APP006_CL_OVERRIDES),
   ...generateChecklist('app-007', TEAM_APP007.research, TEAM_APP007.maintenance, APP007_CL_OVERRIDES),
+  ...generateChecklist('app-008', TEAM_APP005.research, TEAM_APP005.maintenance, makeApp004Overrides(60)),
 ];
 
 export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
@@ -685,6 +724,7 @@ export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
   ...generateReviewEls('app-005', TEAM_APP005.research, TEAM_APP005.maintenance, APP005_RE_OVERRIDES),
   ...generateReviewEls('app-006', TEAM_APP006.research, TEAM_APP006.maintenance, APP006_RE_OVERRIDES),
   ...generateReviewEls('app-007', TEAM_APP007.research, TEAM_APP007.maintenance, APP007_RE_OVERRIDES),
+  ...generateReviewEls('app-008', TEAM_APP005.research, TEAM_APP005.maintenance, makeApp004Overrides(20)),
 ];
 
 // ============================================================
@@ -760,6 +800,12 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h022', applicationId: 'app-007', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-03-05T08:00:05Z' },
   { id: 'h023', applicationId: 'app-007', action: '资料录入', operator: '冯十二', detail: 'SPM角色：完成全部录入和AI检查，可提交审核', timestamp: '2026-03-15T09:00:00Z' },
   { id: 'h024', applicationId: 'app-007', action: '资料录入', operator: '褚十四', detail: '底软角色：完成全部录入和AI检查，可提交审核', timestamp: '2026-03-15T14:00:00Z' },
+  // app-008 历史记录
+  { id: 'h025', applicationId: 'app-008', action: '创建转维申请', operator: '张三', detail: '创建了X7400_H6789(Android16)的转维申请', timestamp: '2026-02-10T09:00:00Z' },
+  { id: 'h026', applicationId: 'app-008', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-02-10T09:00:05Z' },
+  { id: 'h027', applicationId: 'app-008', action: '资料录入完成', operator: '系统', detail: '所有角色资料录入和AI检查全部完成', timestamp: '2026-03-10T10:00:00Z' },
+  { id: 'h028', applicationId: 'app-008', action: '维护审核完成', operator: '系统', detail: '所有角色维护审核全部通过', timestamp: '2026-03-18T09:00:00Z' },
+  { id: 'h029', applicationId: 'app-008', action: '进入SQA审核', operator: '系统', detail: '维护审核全部通过，自动进入SQA审核阶段', timestamp: '2026-03-18T10:00:00Z' },
 ];
 
 // ============================================================

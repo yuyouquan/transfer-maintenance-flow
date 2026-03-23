@@ -138,6 +138,7 @@ interface ApplicationContextValue {
   readonly checklistItems: ReadonlyArray<CheckListItem>;
   readonly reviewElements: ReadonlyArray<ReviewElement>;
   readonly addApplication: (app: TransferApplication) => void;
+  readonly updateApplication: (id: string, updater: (app: TransferApplication) => TransferApplication) => void;
   readonly updateChecklistItems: (updater: ItemUpdater<CheckListItem>) => void;
   readonly updateReviewElements: (updater: ItemUpdater<ReviewElement>) => void;
 }
@@ -195,11 +196,16 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
           ? 'success' as const
           : anyReviewStarted ? 'in_progress' as const : app.pipeline.maintenanceReview;
 
+        // Auto-transition: when maintenanceReview becomes success, start sqaReview
+        const newSqaReview = (newMaintenanceReview === 'success' && app.pipeline.sqaReview === 'not_started')
+          ? 'in_progress' as const
+          : app.pipeline.sqaReview;
+
         // Check if anything actually changed
         const changed = newRoleProgress.some((rp, idx) => {
           const old = app.pipeline.roleProgress[idx];
           return !old || old.entryStatus !== rp.entryStatus || old.reviewStatus !== rp.reviewStatus;
-        }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview;
+        }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview || app.pipeline.sqaReview !== newSqaReview;
 
         if (!changed) return app;
 
@@ -210,6 +216,7 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
             roleProgress: newRoleProgress,
             dataEntry: newDataEntry,
             maintenanceReview: newMaintenanceReview,
+            sqaReview: newSqaReview,
           },
           updatedAt: new Date().toISOString(),
         };
@@ -223,6 +230,10 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
 
   const updateReviewElements = useCallback((updater: ItemUpdater<ReviewElement>) => {
     setReviewElements(updater);
+  }, []);
+
+  const updateApplication = useCallback((id: string, updater: (app: TransferApplication) => TransferApplication) => {
+    setApplications((prev) => prev.map((app) => app.id === id ? updater(app) : app));
   }, []);
 
   const addApplication = useCallback((app: TransferApplication) => {
@@ -240,8 +251,8 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
   }, []);
 
   const value = useMemo(
-    () => ({ applications, checklistItems, reviewElements, addApplication, updateChecklistItems, updateReviewElements }),
-    [applications, checklistItems, reviewElements, addApplication, updateChecklistItems, updateReviewElements],
+    () => ({ applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements }),
+    [applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements],
   );
 
   return (
