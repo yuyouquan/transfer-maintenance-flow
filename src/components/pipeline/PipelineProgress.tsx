@@ -9,7 +9,7 @@ interface PipelineProgressProps {
   readonly showRoleDots?: boolean;
 }
 
-const NODE_LABELS = ['项目发起', '资料录入与AI检查', '维护审核', '信息变更'] as const;
+const NODE_LABELS = ['项目发起', '资料录入与AI检查', '维护审核', 'SQA审核', '信息变更'] as const;
 
 const STATUS_COLORS: Record<PipelineNodeStatus, string> = {
   not_started: '#d9d9d9',
@@ -45,6 +45,7 @@ export default function PipelineProgress({ pipeline, showRoleDots = true }: Pipe
     pipeline.projectInit,
     pipeline.dataEntry,
     pipeline.maintenanceReview,
+    pipeline.sqaReview,
     pipeline.infoChange,
   ];
 
@@ -58,7 +59,7 @@ export default function PipelineProgress({ pipeline, showRoleDots = true }: Pipe
 
         return (
           <React.Fragment key={label}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 100 }}>
               <div
                 style={{
                   width: 32,

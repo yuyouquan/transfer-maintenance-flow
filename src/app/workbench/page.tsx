@@ -9,7 +9,7 @@ import {
   PlusOutlined, SearchOutlined, FileTextOutlined, EditOutlined,
   AuditOutlined, CloseCircleOutlined, RightOutlined, LeftOutlined,
   CarryOutOutlined, ProjectOutlined, SyncOutlined, CheckCircleOutlined,
-  StopOutlined, ClockCircleOutlined,
+  StopOutlined, ClockCircleOutlined, SafetyOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type {
@@ -26,7 +26,7 @@ const { TextArea } = Input;
 
 const PAGE_SIZE = 10;
 
-const PIPELINE_NODES = ['项目发起', '资料录入与AI检查', '维护审核', '信息变更'] as const;
+const PIPELINE_NODES = ['项目发起', '资料录入与AI检查', '维护审核', 'SQA审核', '信息变更'] as const;
 
 const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: string }> = {
   not_started: { color: 'default', label: '未开始' },
@@ -50,7 +50,8 @@ type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled';
 
 const getCurrentNodeIndex = (app: TransferApplication): number => {
   const { pipeline } = app;
-  if (pipeline.infoChange !== 'not_started') return 3;
+  if (pipeline.infoChange !== 'not_started') return 4;
+  if (pipeline.sqaReview !== 'not_started') return 3;
   if (pipeline.maintenanceReview !== 'not_started') return 2;
   if (pipeline.dataEntry !== 'not_started') return 1;
   return 0;
@@ -63,6 +64,7 @@ const getCurrentNodeLabel = (app: TransferApplication): string => {
 const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
   const { pipeline } = app;
   if (pipeline.infoChange !== 'not_started') return pipeline.infoChange;
+  if (pipeline.sqaReview !== 'not_started') return pipeline.sqaReview;
   if (pipeline.maintenanceReview !== 'not_started') return pipeline.maintenanceReview;
   if (pipeline.dataEntry !== 'not_started') return pipeline.dataEntry;
   return pipeline.projectInit;
@@ -71,8 +73,8 @@ const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
 const getPipelinePercent = (app: TransferApplication): number => {
   const idx = getCurrentNodeIndex(app);
   const status = getCurrentNodeStatus(app);
-  const basePercent = (idx / 4) * 100;
-  const stepPercent = status === 'success' ? 25 : status === 'in_progress' ? 12.5 : 0;
+  const basePercent = (idx / 5) * 100;
+  const stepPercent = status === 'success' ? 20 : status === 'in_progress' ? 10 : 0;
   return Math.min(basePercent + stepPercent, 100);
 };
 
@@ -194,7 +196,13 @@ function getUserNodeInfo(
     }
   }
 
-  // SQA or no specific role - show global progress
+  // SQA user: show sqaReview node when in progress
+  const isSQAUser = app.team.research.some((m) => m.role === 'SQA' && m.id === userId);
+  if (isSQAUser && app.pipeline.sqaReview === 'in_progress') {
+    return { nodeIndex: 3, nodeStatus: app.pipeline.sqaReview };
+  }
+
+  // No specific role - show global progress
   return { nodeIndex: getCurrentNodeIndex(app), nodeStatus: getCurrentNodeStatus(app) };
 }
 
@@ -285,6 +293,7 @@ export default function WorkbenchPage() {
   const handleNavigateToDetail = useCallback((id: string) => { router.push(`/workbench/${id}`); }, [router]);
   const handleNavigateToEntry = useCallback((id: string) => { router.push(`/workbench/${id}/entry`); }, [router]);
   const handleNavigateToReview = useCallback((id: string) => { router.push(`/workbench/${id}/review`); }, [router]);
+  const handleNavigateToSqaReview = useCallback((id: string) => { router.push(`/workbench/${id}/sqa-review`); }, [router]);
   const handleNavigateToApply = useCallback(() => { router.push('/workbench/apply'); }, [router]);
 
   const handleOpenCloseModal = useCallback((app: TransferApplication) => {
@@ -443,8 +452,16 @@ export default function WorkbenchPage() {
         const anyRoleRejected = record.pipeline.roleProgress.some(
           (rp) => rp.reviewStatus === 'rejected'
         );
-        const showClose = isInProgress && (
-          (!anyRoleInReview && isApplicant) || (anyRoleRejected && isSQA)
+
+        // SQA审核按钮：正常流程(amber) 或 角色拒绝流程(red)
+        const showSqaNormal = isInProgress && record.pipeline.sqaReview === 'in_progress' && isSQA;
+        const showSqaRejected = isInProgress && isInReview && anyRoleRejected && isSQA;
+        const showSqaReview = showSqaNormal || showSqaRejected;
+        const sqaButtonColor = showSqaRejected ? '#ff4d4f' : '#faad14';
+
+        // 关闭按钮：仅申请人在无角色进入审核时可关闭
+        const showClose = isInProgress && record.pipeline.sqaReview !== 'in_progress' && (
+          !anyRoleInReview && isApplicant
         );
 
         return (
@@ -466,6 +483,13 @@ export default function WorkbenchPage() {
                 style={{ color: '#52c41a' }}
                 onClick={() => handleNavigateToReview(record.id)}>
                 评审
+              </Button>
+            )}
+            {showSqaReview && (
+              <Button type="text" size="small" icon={<SafetyOutlined />}
+                style={{ color: sqaButtonColor }}
+                onClick={() => handleNavigateToSqaReview(record.id)}>
+                SQA审核
               </Button>
             )}
             {showClose && (

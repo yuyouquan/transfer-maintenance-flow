@@ -85,6 +85,7 @@ export interface PipelineState {
   readonly projectInit: PipelineNodeStatus;
   readonly dataEntry: PipelineNodeStatus;
   readonly maintenanceReview: PipelineNodeStatus;
+  readonly sqaReview: PipelineNodeStatus;
   readonly infoChange: PipelineNodeStatus;
   readonly roleProgress: ReadonlyArray<RoleProgress>;
 }
