@@ -394,6 +394,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
   // 测试: 6条CL entered+passed
   // 底软: 4条CL entered+passed, 2条draft
   // 系统: 2条CL entered+passed, 1条failed
+  // 影像: 2条CL entered+passed/draft
   // ============================================================
   {
     id: 'app-005',
@@ -428,6 +429,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
   // 测试: 8条CL entered+passed
   // 底软: 11条CL全部entered+passed, 5条RE全部entered+passed
   // 系统: 5条CL全部entered+passed, 5条RE全部entered+passed
+  // 影像: 全部未录入(not_started)
   // ============================================================
   {
     id: 'app-006',
@@ -450,7 +452,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'completed', reviewStatus: 'not_started' },
-        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-02-25T10:00:00Z',
@@ -485,7 +487,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
         { role: '测试', entryStatus: 'in_progress', reviewStatus: 'not_started' },
         { role: '底软', entryStatus: 'completed', reviewStatus: 'not_started' },
         { role: '系统', entryStatus: 'in_progress', reviewStatus: 'not_started' },
-        { role: '影像', entryStatus: 'in_progress', reviewStatus: 'not_started' },
+        { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
       ],
     },
     createdAt: '2026-03-05T08:00:00Z',
@@ -530,7 +532,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
 // 测试(11条): 前3条已录入通过, 其余未录入
 // 底软(11条): 第1条暂存, 其余未录入
 // 系统(5条): 第1条已录入但AI检查失败, 其余未录入
-// 影像(8条): 全部未录入
+// 影像(8条): 前1条已录入通过, 第2条暂存, 其余未录入
 // ============================================================
 
 const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
@@ -549,6 +551,9 @@ const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
   37: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
   // 系统: indices 47-51, 第1条(47)已录入但AI失败
   47: { entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问', reviewStatus: 'not_reviewed' },
+  // 影像: indices 52-59, 前2条(52-53)已录入, 第53条暂存
+  52: { entryContent: '影像ISP调试参数已完成归档\nhttps://feishu.cn/docs/x6870-isp-params', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  53: { entryContent: '摄像头标定数据整理中', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed' },
 };
 
 const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
@@ -631,6 +636,9 @@ const APP005_CL_OVERRIDES: Record<number, ItemOverride> = {
   // 系统 (47-51): 前2条 entered+passed, 第3条 AI检查失败, 其余未录入
   ...rangeOverrides(47, 48, ENTERED_PASSED),
   49: { entryContent: '系统已知问题清单链接：https://feishu.cn/docs/expired-link', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '提供的文档链接已失效，请更新有效的系统已知问题清单链接', reviewStatus: 'not_reviewed' },
+  // 影像 (52-59): 前2条 entered+passed, 第3条暂存
+  52: { entryContent: '影像ISP参数调试文档\nhttps://feishu.cn/docs/x7100-isp', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
+  53: { entryContent: '摄像头模组兼容性测试记录整理中', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed' },
 };
 
 const APP005_RE_OVERRIDES: Record<number, ItemOverride> = {
@@ -813,20 +821,30 @@ export const MOCK_HISTORY: HistoryRecord[] = [
 // ============================================================
 
 export const MOCK_TODOS: TodoItem[] = [
+  // === app-001: 资料录入进行中，全部角色录入中 (TEAM_APP001 研发侧) ===
   { id: 'todo-001', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '张三', type: 'entry' },
-  { id: 'todo-002', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
-  { id: 'todo-003', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: '维护审核', responsiblePerson: '张三', type: 'review' },
+  { id: 'todo-002', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '李四', type: 'entry' },
+  { id: 'todo-003', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
   { id: 'todo-004', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '钱七', type: 'entry' },
-  // app-005: 张三SPM可提交审核，其他角色还需继续录入
-  { id: 'todo-005', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '张三', type: 'entry' },
-  { id: 'todo-006', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
-  { id: 'todo-007', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '钱七', type: 'entry' },
-  // app-006: 底软和系统可提交审核，SPM和测试还需继续
-  { id: 'todo-008', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '张三', type: 'entry' },
-  { id: 'todo-009', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
-  { id: 'todo-010', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '钱七', type: 'entry' },
-  // app-007: 冯十二SPM和褚十四底软可提交审核
-  { id: 'todo-011', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '冯十二', type: 'entry' },
-  { id: 'todo-012', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '褚十四', type: 'entry' },
-  { id: 'todo-013', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '卫十五', type: 'entry' },
+  { id: 'todo-005', applicationId: 'app-001', projectName: 'X6870_H1234(Android16)', node: '资料录入与AI检查', responsiblePerson: '蒋十六', type: 'entry' },
+  // === app-002: 维护审核进行中 (TEAM_APP002 维护侧) ===
+  // 赵六：底软审核中(reviewing)
+  { id: 'todo-006', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: '维护审核', responsiblePerson: '赵六', type: 'review' },
+  // 王五(SQA)：SPM角色审核被拒绝，需SQA介入处理
+  { id: 'todo-007', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: 'SQA审核', responsiblePerson: '王五', type: 'sqa_review' },
+  // === app-005: 资料录入进行中，SPM已完成，其余角色继续 (TEAM_APP005 研发侧) ===
+  { id: 'todo-008', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '李四', type: 'entry' },
+  { id: 'todo-009', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
+  { id: 'todo-010', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '钱七', type: 'entry' },
+  { id: 'todo-011', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '蒋十六', type: 'entry' },
+  // === app-006: 资料录入进行中，底软/系统已完成 (TEAM_APP006 研发侧) ===
+  { id: 'todo-012', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '张三', type: 'entry' },
+  { id: 'todo-013', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '李四', type: 'entry' },
+  { id: 'todo-014', applicationId: 'app-006', projectName: 'X7200_H7890(Android16)', node: '资料录入与AI检查', responsiblePerson: '蒋十六', type: 'entry' },
+  // === app-007: 资料录入进行中，SPM/底软已完成 (TEAM_APP007 研发侧) ===
+  { id: 'todo-015', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '陈十三', type: 'entry' },
+  { id: 'todo-016', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '卫十五', type: 'entry' },
+  { id: 'todo-017', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '蒋十六', type: 'entry' },
+  // === app-008: SQA审核进行中 ===
+  { id: 'todo-018', applicationId: 'app-008', projectName: 'X7400_H6789(Android16)', node: 'SQA审核', responsiblePerson: '王五', type: 'sqa_review' },
 ];
