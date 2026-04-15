@@ -755,8 +755,8 @@ export default function ApplicationDetailPage({
             ) : (
               <Timeline
                 items={historyRecords.map((record) => ({
-                  dot: getTimelineIcon(record.action),
-                  children: (
+                  icon: getTimelineIcon(record.action),
+                  content: (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 500 }}>{record.action}</span>

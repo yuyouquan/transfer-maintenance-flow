@@ -15,7 +15,7 @@ export function useColumnSearch<T>() {
   const searchInput = useRef<InputRef>(null);
 
   const getColumnSearchProps = useCallback(
-    (dataIndex: keyof T & string): Pick<ColumnType<T>, 'filterDropdown' | 'filterIcon' | 'onFilter' | 'onFilterDropdownOpenChange'> => ({
+    (dataIndex: keyof T & string): Pick<ColumnType<T>, 'filterDropdown' | 'filterIcon' | 'onFilter' | 'filterDropdownProps'> => ({
       filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: FilterDropdownProps) => (
         <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
           <Input
@@ -54,10 +54,12 @@ export function useColumnSearch<T>() {
         if (val == null) return false;
         return String(val).toLowerCase().includes(String(value).toLowerCase());
       },
-      onFilterDropdownOpenChange: (visible) => {
-        if (visible) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
+      filterDropdownProps: {
+        onOpenChange: (visible) => {
+          if (visible) {
+            setTimeout(() => searchInput.current?.select(), 100);
+          }
+        },
       },
     }),
     [],
