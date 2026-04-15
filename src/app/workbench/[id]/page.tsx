@@ -19,6 +19,13 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
+  SyncOutlined,
+  FileTextOutlined,
+  TeamOutlined,
+  AuditOutlined,
+  StopOutlined,
+  PushpinOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -177,14 +184,14 @@ function TeamMemberCard({ member }: { readonly member: TeamMember }) {
 // --- 悬浮锚点导航 ---
 
 const ANCHOR_SECTIONS = [
-  { id: 'section-pipeline', label: '流水线', icon: '🔄' },
-  { id: 'section-info', label: '项目信息', icon: '📋' },
-  { id: 'section-team', label: '团队信息', icon: '👥' },
-  { id: 'section-checklist', label: 'CheckList', icon: '✅' },
-  { id: 'section-review', label: '评审要素', icon: '📝' },
-  { id: 'section-block', label: 'Block任务', icon: '🚫' },
-  { id: 'section-legacy', label: '遗留任务', icon: '📌' },
-  { id: 'section-history', label: '历史记录', icon: '🕐' },
+  { id: 'section-pipeline', label: '流水线', icon: <SyncOutlined /> },
+  { id: 'section-info', label: '项目信息', icon: <FileTextOutlined /> },
+  { id: 'section-team', label: '团队信息', icon: <TeamOutlined /> },
+  { id: 'section-checklist', label: 'CheckList', icon: <CheckCircleOutlined /> },
+  { id: 'section-review', label: '评审要素', icon: <AuditOutlined /> },
+  { id: 'section-block', label: 'Block任务', icon: <StopOutlined /> },
+  { id: 'section-legacy', label: '遗留任务', icon: <PushpinOutlined /> },
+  { id: 'section-history', label: '历史记录', icon: <HistoryOutlined /> },
 ] as const;
 
 function FloatingAnchor() {

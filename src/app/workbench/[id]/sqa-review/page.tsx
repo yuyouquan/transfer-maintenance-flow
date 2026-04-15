@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use, useCallback } from 'react';
 import {
+  Alert,
   Card,
   Descriptions,
   Table,
@@ -18,6 +19,12 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   SafetyOutlined,
+  SyncOutlined,
+  FileTextOutlined,
+  TeamOutlined,
+  AuditOutlined,
+  StopOutlined,
+  PushpinOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -161,14 +168,14 @@ function renderEntryContent(record: { entryContent?: string }): React.ReactNode 
 // --- Floating anchor navigation ---
 
 const ANCHOR_SECTIONS = [
-  { id: 'sqa-section-pipeline', label: '流水线', icon: '🔄' },
-  { id: 'sqa-section-info', label: '项目信息', icon: '📋' },
-  { id: 'sqa-section-team', label: '团队信息', icon: '👥' },
-  { id: 'sqa-section-checklist', label: 'CheckList', icon: '✅' },
-  { id: 'sqa-section-review', label: '评审要素', icon: '📝' },
-  { id: 'sqa-section-block', label: 'Block任务', icon: '🚫' },
-  { id: 'sqa-section-legacy', label: '遗留任务', icon: '📌' },
-  { id: 'sqa-section-sqa', label: 'SQA评审', icon: '🛡️' },
+  { id: 'sqa-section-pipeline', label: '流水线', icon: <SyncOutlined /> },
+  { id: 'sqa-section-info', label: '项目信息', icon: <FileTextOutlined /> },
+  { id: 'sqa-section-team', label: '团队信息', icon: <TeamOutlined /> },
+  { id: 'sqa-section-checklist', label: 'CheckList', icon: <CheckCircleOutlined /> },
+  { id: 'sqa-section-review', label: '评审要素', icon: <AuditOutlined /> },
+  { id: 'sqa-section-block', label: 'Block任务', icon: <StopOutlined /> },
+  { id: 'sqa-section-legacy', label: '遗留任务', icon: <PushpinOutlined /> },
+  { id: 'sqa-section-sqa', label: 'SQA评审', icon: <SafetyOutlined /> },
 ] as const;
 
 function FloatingAnchor() {
@@ -603,6 +610,17 @@ export default function SqaReviewPage({
           />
         </div>
 
+        {/* Rejection mode alert */}
+        {isRejectionMode && (
+          <Alert
+            type="warning"
+            showIcon
+            message="当前处于驳回处理模式"
+            description="维护审核中有角色被拒绝，请审核拒绝情况后决定是否终止流水线并回退到维护审核阶段。"
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         {/* Action buttons */}
         {canOperate && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
@@ -664,7 +682,7 @@ export default function SqaReviewPage({
         cancelText="取消"
         okButtonProps={{ danger: true }}
       >
-        <p>确认不通过SQA审核？不通过将终止该转维流水线。</p>
+        <p>确认不通过SQA审核？不通过将回退到维护审核阶段，相关角色需重新审核。</p>
         {!sqaComment.trim() && (
           <p style={{ color: '#ff4d4f', fontSize: 13 }}>请先在评审建议中填写不通过原因</p>
         )}
