@@ -6,14 +6,11 @@ import {
   Descriptions,
   Table,
   Tag,
-  Tabs,
   Avatar,
   Alert,
   Timeline,
-  Badge,
   Button,
   Modal,
-  Tooltip,
   Empty,
 } from 'antd';
 import {
@@ -22,8 +19,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
-  MinusOutlined,
-  LoadingOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -34,12 +29,10 @@ import {
 } from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
 import type {
-  TransferApplication,
   CheckListItem,
   ReviewElement,
   BlockTask,
   LegacyTask,
-  HistoryRecord,
   EntryStatus,
   AICheckStatus,
   ReviewStatus,

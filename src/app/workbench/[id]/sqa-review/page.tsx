@@ -291,19 +291,19 @@ export default function SqaReviewPage({
       message.warning('请填写SQA评审建议');
       return;
     }
+    // SQA 不通过：回退到维护审核阶段，不取消流水线
     updateApplication(id, (app) => ({
       ...app,
       pipeline: {
         ...app.pipeline,
         sqaReview: 'failed',
+        maintenanceReview: 'in_progress',
       },
-      status: 'cancelled',
-      cancelReason: sqaComment.trim(),
       updatedAt: new Date().toISOString(),
     }));
-    message.success('SQA审核不通过，流水线已终止');
+    message.success('SQA审核不通过，已回退到维护审核阶段');
     setRejectModalVisible(false);
-    router.push('/workbench');
+    router.push(`/workbench/${id}`);
   }, [id, sqaComment, updateApplication, router]);
 
   if (!application) {
