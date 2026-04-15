@@ -38,6 +38,7 @@ const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: str
 const TODO_TYPE_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
   entry: { color: '#1677ff', label: '录入', icon: <EditOutlined /> },
   review: { color: '#52c41a', label: '评审', icon: <AuditOutlined /> },
+  sqa_review: { color: '#faad14', label: 'SQA审核', icon: <SafetyOutlined /> },
 };
 
 const ROLE_DISPLAY_MAP: Record<string, string> = {
@@ -321,7 +322,8 @@ export default function WorkbenchPage() {
 
   const handleTodoAction = useCallback(
     (todo: TodoItem) => {
-      router.push(`/workbench/${todo.applicationId}/${todo.type === 'entry' ? 'entry' : 'review'}`);
+      const route = todo.type === 'entry' ? 'entry' : todo.type === 'sqa_review' ? 'sqa-review' : 'review';
+      router.push(`/workbench/${todo.applicationId}/${route}`);
     },
     [router]
   );
@@ -453,11 +455,14 @@ export default function WorkbenchPage() {
           (rp) => rp.reviewStatus === 'rejected'
         );
 
-        // SQA审核按钮：正常流程(amber) 或 角色拒绝流程(red)
+        // SQA审核按钮：所有角色审核通过(墨绿) / 角色拒绝流程(red) / 正常流程(amber)
+        const allRoleReviewCompleted = record.pipeline.roleProgress.every(
+          (rp) => rp.reviewStatus === 'completed'
+        );
         const showSqaNormal = isInProgress && record.pipeline.sqaReview === 'in_progress' && isSQA;
         const showSqaRejected = isInProgress && isInReview && anyRoleRejected && isSQA;
         const showSqaReview = showSqaNormal || showSqaRejected;
-        const sqaButtonColor = showSqaRejected ? '#ff4d4f' : '#faad14';
+        const sqaButtonColor = showSqaRejected ? '#ff4d4f' : allRoleReviewCompleted ? '#006d5b' : '#faad14';
 
         // 关闭按钮：仅申请人在无角色进入审核时可关闭
         const showClose = isInProgress && record.pipeline.sqaReview !== 'in_progress' && (

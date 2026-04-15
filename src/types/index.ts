@@ -194,7 +194,7 @@ export interface TodoItem {
   readonly projectName: string;
   readonly node: string;
   readonly responsiblePerson: string;
-  readonly type: 'entry' | 'review';
+  readonly type: 'entry' | 'review' | 'sqa_review';
 }
 
 // --- 配置中心模板 ---
