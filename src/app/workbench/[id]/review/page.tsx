@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  message, Alert, Tooltip, Divider,
+  message, Tooltip, Divider,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
@@ -168,20 +168,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     { responsiblePerson: '', department: '', description: '', deadline: '' },
   ]);
 
-  if (!application) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <h2>未找到转维申请</h2>
-        <Button onClick={() => router.push('/workbench')}>返回</Button>
-      </div>
-    );
-  }
+  // --- All hooks must be above the early return ---
 
   const currentRole = userResponsibleRole ?? 'SPM';
-  const maintenanceMember = application.team.maintenance.find((m) => m.id === currentUser.id);
+  const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
 
   // --- Single item review ---
-  const handleItemReview = (itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
+  const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
     if (type === 'checklist') {
       setAllChecklistItems((prev) =>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
@@ -192,10 +185,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       );
     }
     message.success(newStatus === 'passed' ? '已通过' : '已标记为不通过');
-  };
+  }, [setAllChecklistItems, setAllReviewElements]);
 
   // --- Batch review ---
-  const handleBatchReview = (newStatus: ReviewStatus) => {
+  const handleBatchReview = useCallback((newStatus: ReviewStatus) => {
     if (activeTab === 'checklist') {
       setAllChecklistItems((prev) =>
         prev.map((item) =>
@@ -211,23 +204,28 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     }
     setSelectedRowKeys([]);
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
-  };
+  }, [activeTab, selectedRowKeys, setAllChecklistItems, setAllReviewElements]);
 
   // Helper: update all items of current role to a given reviewStatus
   const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus) => {
     const isMyRoleItem = (item: CheckListItem | ReviewElement) =>
       item.responsibleRole === userResponsibleRole;
 
-    setAllChecklistItems((prev) =>
-      prev.map((item) => isMyRoleItem(item) ? { ...item, reviewStatus: newStatus } : item)
-    );
-    setAllReviewElements((prev) =>
-      prev.map((item) => isMyRoleItem(item) ? { ...item, reviewStatus: newStatus } : item)
-    );
+    // 驳回时重置 aiCheckStatus，强制研发侧重新修改并触发AI检查后才能再提交
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!isMyRoleItem(item)) return item;
+      if (newStatus === 'rejected') {
+        return { ...item, reviewStatus: newStatus, aiCheckStatus: 'not_started' as const };
+      }
+      return { ...item, reviewStatus: newStatus };
+    };
+
+    setAllChecklistItems((prev) => prev.map(updateItem));
+    setAllReviewElements((prev) => prev.map(updateItem));
   }, [setAllChecklistItems, setAllReviewElements, userResponsibleRole]);
 
   // --- Pass confirm ---
-  const handlePassConfirm = () => {
+  const handlePassConfirm = useCallback(() => {
     if (wantLegacy) {
       const hasEmpty = legacyTasks.some(
         (t) => !t.responsiblePerson || !t.department || !t.description || !t.deadline
@@ -243,10 +241,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setWantLegacy(false);
     setLegacyTasks([{ responsiblePerson: '', department: '', description: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  };
+  }, [wantLegacy, legacyTasks, applyRoleReviewStatus, router, id]);
 
   // --- Fail confirm ---
-  const handleFailConfirm = () => {
+  const handleFailConfirm = useCallback(() => {
     if (!reviewComment.trim()) {
       message.warning('请填写评审意见');
       return;
@@ -264,47 +262,47 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setReviewComment('');
     setBlockTasks([{ description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  };
+  }, [reviewComment, blockTasks, applyRoleReviewStatus, router, id]);
 
   // --- Block task CRUD ---
-  const addBlockTask = () => {
+  const addBlockTask = useCallback(() => {
     setBlockTasks((prev) => [
       ...prev,
       { description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' },
     ]);
-  };
-  const removeBlockTask = (index: number) => {
+  }, []);
+  const removeBlockTask = useCallback((index: number) => {
     setBlockTasks((prev) => prev.filter((_, i) => i !== index));
-  };
-  const updateBlockTask = (index: number, field: keyof BlockTaskForm, value: string) => {
+  }, []);
+  const updateBlockTask = useCallback((index: number, field: keyof BlockTaskForm, value: string) => {
     setBlockTasks((prev) =>
       prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
     );
-  };
+  }, []);
 
   // --- Legacy task CRUD ---
-  const addLegacyTask = () => {
+  const addLegacyTask = useCallback(() => {
     setLegacyTasks((prev) => [
       ...prev,
       { responsiblePerson: '', department: '', description: '', deadline: '' },
     ]);
-  };
-  const removeLegacyTask = (index: number) => {
+  }, []);
+  const removeLegacyTask = useCallback((index: number) => {
     setLegacyTasks((prev) => prev.filter((_, i) => i !== index));
-  };
-  const updateLegacyTask = (index: number, field: keyof LegacyTaskForm, value: string) => {
+  }, []);
+  const updateLegacyTask = useCallback((index: number, field: keyof LegacyTaskForm, value: string) => {
     setLegacyTasks((prev) =>
       prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
     );
-  };
+  }, []);
 
   // --- Delegate: assign all review items of current role to another person ---
-  const openDelegateModal = () => {
+  const openDelegateModal = useCallback(() => {
     setDelegatePersonId(undefined);
     setDelegateModalOpen(true);
-  };
+  }, []);
 
-  const handleDelegateConfirm = () => {
+  const handleDelegateConfirm = useCallback(() => {
     if (!delegatePersonId) {
       message.warning('请选择委派人员');
       return;
@@ -333,14 +331,27 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setDelegateModalOpen(false);
     setDelegatePersonId(undefined);
     message.success(`已将${currentRole}角色的审核任务委派给 ${targetUser.name}`);
-  };
+  }, [delegatePersonId, userResponsibleRole, currentUser.id, currentRole, setAllChecklistItems, setAllReviewElements]);
 
   // --- User options for selectors ---
-  const userOptions = MOCK_USERS.map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id }));
+  const userOptions = useMemo(
+    () => MOCK_USERS.map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id })),
+    [],
+  );
 
   // --- Column search ---
   const { getColumnSearchProps: getClSearchProps } = useColumnSearch<CheckListItem>();
   const { getColumnSearchProps: getReSearchProps } = useColumnSearch<ReviewElement>();
+
+  // --- Early return after all hooks ---
+  if (!application) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <h2>未找到转维申请</h2>
+        <Button onClick={() => router.push('/workbench')}>返回</Button>
+      </div>
+    );
+  }
 
   // --- Checklist columns ---
   const checklistColumns: ColumnsType<CheckListItem> = [
@@ -510,8 +521,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
   };
 
-  const currentTab = activeTab as 'checklist' | 'review_element';
-
   return (
     <div style={{ padding: '16px 24px', background: '#f5f5f5', minHeight: '100vh' }}>
       {/* Header */}
@@ -635,7 +644,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         okText="确认通过"
         cancelText="取消"
         width={700}
-        destroyOnClose
+        destroyOnHidden
       >
         {!wantLegacy ? (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
@@ -707,7 +716,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         okText="确认并保存"
         cancelText="取消"
         width={750}
-        destroyOnClose
+        destroyOnHidden
       >
         <p style={{ color: '#999', marginBottom: 16 }}>若检查项未通过，可添加一个或多个 Block 任务以便跟踪整改。</p>
         <div style={{ marginBottom: 20 }}>
@@ -773,7 +782,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         okText="确认委派"
         cancelText="取消"
         width={500}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16, color: '#666' }}>
           将 <Tag color="blue">{currentRole}</Tag> 角色的所有审核任务委派给其他人员，委派后该人员将成为新的审核责任人。

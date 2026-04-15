@@ -5,7 +5,6 @@ import { Layout, Menu, Avatar, Dropdown, Tag, type MenuProps } from 'antd';
 import {
   ProjectOutlined,
   SettingOutlined,
-  UserOutlined,
   SwapOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons';
@@ -156,7 +155,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           menu={{ items: userMenuItems }}
           placement="bottomRight"
           trigger={['click']}
-          overlayStyle={{ minWidth: 300 }}
+          styles={{ root: { minWidth: 300 } }}
         >
           <div
             style={{

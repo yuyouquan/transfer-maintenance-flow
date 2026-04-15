@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type {
   TransferApplication, CheckListItem, ReviewElement, TeamMember, PipelineRole, RoleNodeStatus,
 } from '@/types';
@@ -146,7 +146,7 @@ interface ApplicationContextValue {
 const ApplicationContext = createContext<ApplicationContextValue | null>(null);
 
 export function ApplicationProvider({ children }: { readonly children: React.ReactNode }) {
-  const [applications, setApplications] = useState<ReadonlyArray<TransferApplication>>(
+  const [baseApplications, setBaseApplications] = useState<ReadonlyArray<TransferApplication>>(
     () => [...MOCK_APPLICATIONS],
   );
   const [checklistItems, setChecklistItems] = useState<ReadonlyArray<CheckListItem>>(
@@ -156,73 +156,64 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
     () => [...MOCK_REVIEW_ELEMENTS],
   );
 
-  // Auto-sync roleProgress when items change
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+  // Derive applications with synced roleProgress from items (no useEffect needed)
+  const applications = useMemo(() =>
+    baseApplications.map((app) => {
+      if (app.status !== 'in_progress') return app;
 
-    setApplications((prev) =>
-      prev.map((app) => {
-        if (app.status !== 'in_progress') return app;
+      const appItems: ReadonlyArray<CheckListItem | ReviewElement> = [
+        ...checklistItems.filter((i) => i.applicationId === app.id),
+        ...reviewElements.filter((i) => i.applicationId === app.id),
+      ];
 
-        const appItems: ReadonlyArray<CheckListItem | ReviewElement> = [
-          ...checklistItems.filter((i) => i.applicationId === app.id),
-          ...reviewElements.filter((i) => i.applicationId === app.id),
-        ];
+      const newRoleProgress = PIPELINE_ROLES.map((role) => ({
+        role,
+        entryStatus: computeRoleEntryStatus(appItems, role),
+        reviewStatus: computeRoleReviewStatus(appItems, role),
+      }));
 
-        const newRoleProgress = PIPELINE_ROLES.map((role) => ({
-          role,
-          entryStatus: computeRoleEntryStatus(appItems, role),
-          reviewStatus: computeRoleReviewStatus(appItems, role),
-        }));
+      // Derive main pipeline node statuses from roleProgress
+      const allEntryCompleted = newRoleProgress.every((rp) => rp.entryStatus === 'completed');
+      const anyEntryStarted = newRoleProgress.some(
+        (rp) => rp.entryStatus === 'in_progress' || rp.entryStatus === 'completed',
+      );
+      const newDataEntry = allEntryCompleted
+        ? 'success' as const
+        : anyEntryStarted ? 'in_progress' as const : app.pipeline.dataEntry;
 
-        // Derive main pipeline node statuses from roleProgress
-        const allEntryCompleted = newRoleProgress.every((rp) => rp.entryStatus === 'completed');
-        const anyEntryStarted = newRoleProgress.some(
-          (rp) => rp.entryStatus === 'in_progress' || rp.entryStatus === 'completed',
-        );
-        const newDataEntry = allEntryCompleted
-          ? 'success' as const
-          : anyEntryStarted ? 'in_progress' as const : app.pipeline.dataEntry;
+      const allReviewCompleted = newRoleProgress.every((rp) => rp.reviewStatus === 'completed');
+      const anyReviewStarted = newRoleProgress.some(
+        (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed' || rp.reviewStatus === 'rejected',
+      );
+      const newMaintenanceReview = allReviewCompleted
+        ? 'success' as const
+        : anyReviewStarted ? 'in_progress' as const : app.pipeline.maintenanceReview;
 
-        const allReviewCompleted = newRoleProgress.every((rp) => rp.reviewStatus === 'completed');
-        const anyReviewStarted = newRoleProgress.some(
-          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed' || rp.reviewStatus === 'rejected',
-        );
-        const newMaintenanceReview = allReviewCompleted
-          ? 'success' as const
-          : anyReviewStarted ? 'in_progress' as const : app.pipeline.maintenanceReview;
+      // Auto-transition: when maintenanceReview becomes success, start sqaReview
+      const newSqaReview = (newMaintenanceReview === 'success' && app.pipeline.sqaReview === 'not_started')
+        ? 'in_progress' as const
+        : app.pipeline.sqaReview;
 
-        // Auto-transition: when maintenanceReview becomes success, start sqaReview
-        const newSqaReview = (newMaintenanceReview === 'success' && app.pipeline.sqaReview === 'not_started')
-          ? 'in_progress' as const
-          : app.pipeline.sqaReview;
+      // Check if anything actually changed
+      const changed = newRoleProgress.some((rp, idx) => {
+        const old = app.pipeline.roleProgress[idx];
+        return !old || old.entryStatus !== rp.entryStatus || old.reviewStatus !== rp.reviewStatus;
+      }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview || app.pipeline.sqaReview !== newSqaReview;
 
-        // Check if anything actually changed
-        const changed = newRoleProgress.some((rp, idx) => {
-          const old = app.pipeline.roleProgress[idx];
-          return !old || old.entryStatus !== rp.entryStatus || old.reviewStatus !== rp.reviewStatus;
-        }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview || app.pipeline.sqaReview !== newSqaReview;
+      if (!changed) return app;
 
-        if (!changed) return app;
-
-        return {
-          ...app,
-          pipeline: {
-            ...app.pipeline,
-            roleProgress: newRoleProgress,
-            dataEntry: newDataEntry,
-            maintenanceReview: newMaintenanceReview,
-            sqaReview: newSqaReview,
-          },
-          updatedAt: new Date().toISOString(),
-        };
-      }),
-    );
-  }, [checklistItems, reviewElements]);
+      return {
+        ...app,
+        pipeline: {
+          ...app.pipeline,
+          roleProgress: newRoleProgress,
+          dataEntry: newDataEntry,
+          maintenanceReview: newMaintenanceReview,
+          sqaReview: newSqaReview,
+        },
+      };
+    }),
+  [baseApplications, checklistItems, reviewElements]);
 
   const updateChecklistItems = useCallback((updater: ItemUpdater<CheckListItem>) => {
     setChecklistItems(updater);
@@ -233,11 +224,11 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
   }, []);
 
   const updateApplication = useCallback((id: string, updater: (app: TransferApplication) => TransferApplication) => {
-    setApplications((prev) => prev.map((app) => app.id === id ? updater(app) : app));
+    setBaseApplications((prev) => prev.map((app) => app.id === id ? updater(app) : app));
   }, []);
 
   const addApplication = useCallback((app: TransferApplication) => {
-    setApplications((prev) => [app, ...prev]);
+    setBaseApplications((prev) => [app, ...prev]);
 
     const newChecklistItems = generateChecklistItems(
       app.id, app.team.research, app.team.maintenance,

@@ -3,17 +3,17 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Table, Input, Button, Tag, Space, Modal, Card, Typography, Badge, message, Segmented, Progress, Tooltip,
+  Table, Input, Button, Tag, Space, Modal, Typography, Badge, message, Progress, Tooltip,
 } from 'antd';
 import {
-  PlusOutlined, SearchOutlined, FileTextOutlined, EditOutlined,
+  PlusOutlined, FileTextOutlined, EditOutlined,
   AuditOutlined, CloseCircleOutlined, RightOutlined, LeftOutlined,
   CarryOutOutlined, ProjectOutlined, SyncOutlined, CheckCircleOutlined,
   StopOutlined, ClockCircleOutlined, SafetyOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type {
-  TransferApplication, TodoItem, PipelineStatus, PipelineNodeStatus, CloseReviewRow,
+  TransferApplication, TodoItem, PipelineNodeStatus, CloseReviewRow,
 } from '@/types';
 import { MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
 import { useCurrentUser } from '@/context/UserContext';
@@ -58,10 +58,6 @@ const getCurrentNodeIndex = (app: TransferApplication): number => {
   return 0;
 };
 
-const getCurrentNodeLabel = (app: TransferApplication): string => {
-  return PIPELINE_NODES[getCurrentNodeIndex(app)];
-};
-
 const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
   const { pipeline } = app;
   if (pipeline.infoChange !== 'not_started') return pipeline.infoChange;
@@ -81,7 +77,7 @@ const getPipelinePercent = (app: TransferApplication): number => {
 
 const hasAnyRoleEnteredReview = (app: TransferApplication): boolean => {
   return app.pipeline.roleProgress.some(
-    (rp) => rp.reviewStatus === 'completed' || rp.reviewStatus === 'in_progress'
+    (rp) => rp.reviewStatus === 'completed' || rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'rejected'
   );
 };
 
@@ -429,6 +425,11 @@ export default function WorkbenchPage() {
         const isSQA = record.team.research.some((m) => m.role === 'SQA' && m.id === currentUser.id);
 
         const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
+        // 当角色审核被拒绝时，即使dataEntry=success，研发侧也需要重新修改资料
+        const hasRejectedRole = record.pipeline.roleProgress.some(
+          (rp) => rp.reviewStatus === 'rejected'
+        );
+        const canEntry = isInDataEntry || hasRejectedRole;
         const hasEntryRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.entryStatus === 'completed' && rp.reviewStatus !== 'rejected') return false;
           const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
@@ -438,7 +439,7 @@ export default function WorkbenchPage() {
           ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
           ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
         ].some((i) => i.entryPersonId === currentUser.id || i.delegatedTo?.includes(currentUser.id));
-        const showEntry = isInProgress && isInDataEntry && (hasEntryRole || isDelegatedEntry);
+        const showEntry = isInProgress && canEntry && (hasEntryRole || isDelegatedEntry);
 
         const isInReview = record.pipeline.maintenanceReview === 'in_progress';
         const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
@@ -448,8 +449,8 @@ export default function WorkbenchPage() {
         });
         const showReview = isInProgress && isInReview && hasReviewRole;
 
-        const anyRoleInReview = record.pipeline.roleProgress.some(
-          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed' || rp.reviewStatus === 'rejected'
+        const anyRoleActivelyReviewing = record.pipeline.roleProgress.some(
+          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
         );
         const anyRoleRejected = record.pipeline.roleProgress.some(
           (rp) => rp.reviewStatus === 'rejected'
@@ -464,9 +465,9 @@ export default function WorkbenchPage() {
         const showSqaReview = showSqaNormal || showSqaRejected;
         const sqaButtonColor = showSqaRejected ? '#ff4d4f' : allRoleReviewCompleted ? '#006d5b' : '#faad14';
 
-        // 关闭按钮：仅申请人在无角色进入审核时可关闭
+        // 关闭按钮：申请人可关闭，但不能在SQA审核中或有角色正在审核/已通过审核时关闭
         const showClose = isInProgress && record.pipeline.sqaReview !== 'in_progress' && (
-          !anyRoleInReview && isApplicant
+          !anyRoleActivelyReviewing && isApplicant
         );
 
         return (
@@ -712,7 +713,7 @@ export default function WorkbenchPage() {
         cancelText="取消"
         okButtonProps={{ danger: true }}
         width={showReviewTable ? 640 : 480}
-        destroyOnClose
+        destroyOnHidden
       >
         {closeTargetApp && (
           <div>

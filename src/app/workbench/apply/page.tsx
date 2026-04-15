@@ -22,11 +22,10 @@ import {
   UserOutlined,
   ArrowLeftOutlined,
   SwapOutlined,
-  DeleteOutlined,
-  PlusOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { MOCK_PROJECTS, MOCK_USERS } from '@/mock';
+import dayjs from 'dayjs';
 import type { Project, TeamMember, RoleType, TransferApplication } from '@/types';
 import { useCurrentUser } from '@/context/UserContext';
 import { useApplications } from '@/context/ApplicationContext';
@@ -338,7 +337,7 @@ export default function ApplyPage() {
             maintenance: maintenanceTeam,
           },
           plannedReviewDate: values.plannedReviewDate
-            ? (values.plannedReviewDate as { format: (f: string) => string }).format('YYYY-MM-DD')
+            ? dayjs(values.plannedReviewDate as string | Date).format('YYYY-MM-DD')
             : '',
           remark: values.remark ?? '',
           status: 'in_progress',

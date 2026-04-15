@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse,
 } from 'antd';
@@ -81,16 +81,13 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   }, [application, currentUser.id]);
 
   // Active role state — for role switching when user has multiple roles
+  // Initialize to first role, sync when roles change via controlled state
   const [activeRole, setActiveRole] = useState<PipelineRole | null>(null);
 
-  // Initialize / sync activeRole when roles change
-  useEffect(() => {
-    if (userResponsibleRoles.length > 0 && (!activeRole || !userResponsibleRoles.includes(activeRole))) {
-      setActiveRole(userResponsibleRoles[0]);
-    }
-  }, [userResponsibleRoles]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const effectiveRole = activeRole ?? userResponsibleRoles[0] ?? null;
+  const effectiveRole = useMemo(() => {
+    if (activeRole && userResponsibleRoles.includes(activeRole)) return activeRole;
+    return userResponsibleRoles[0] ?? null;
+  }, [activeRole, userResponsibleRoles]);
 
   // Derived from context
   const checklistItems = useMemo(
@@ -153,8 +150,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }, [reviewElements, userResponsibleRoles, currentUser.id]);
 
-  const hasDelegatedItems = delegatedChecklist.length > 0 || delegatedReviewElements.length > 0;
-
   // Block tasks for rejected alert
   const blockTasks = useMemo(
     () => MOCK_BLOCK_TASKS.filter((t) => t.applicationId === id && t.status === 'open'),
@@ -215,6 +210,34 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     setEntryModalVisible(true);
   }, [checklistItems, reviewElements]);
 
+  // 模拟AI检查完成：1-2秒后自动判定 passed 或 failed
+  const simulateAiCheck = useCallback((itemId: string, tab: 'checklist' | 'review') => {
+    const delay = 1000 + Math.random() * 1000;
+    setTimeout(() => {
+      // 90% 通过, 10% 失败
+      const passed = Math.random() > 0.1;
+      const result: AICheckStatus = passed ? 'passed' : 'failed';
+      const aiResult = passed
+        ? 'AI检查通过，内容符合要求。'
+        : 'AI检查不通过，请检查内容是否完整或链接是否有效。';
+
+      const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T =>
+        item.id === itemId ? { ...item, aiCheckStatus: result, aiCheckResult: aiResult } as T : item;
+
+      if (tab === 'checklist') {
+        setChecklistItems((prev) => prev.map(updateItem));
+      } else {
+        setReviewElements((prev) => prev.map(updateItem));
+      }
+
+      if (passed) {
+        message.success('AI检查通过');
+      } else {
+        message.error('AI检查不通过，请修改后重新提交');
+      }
+    }, delay);
+  }, [setChecklistItems, setReviewElements]);
+
   const handleEntrySave = useCallback((mode: 'draft' | 'confirm') => {
     if (!entryModalTarget) return;
     if (!entryContent.trim()) {
@@ -229,7 +252,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       setChecklistItems((prev) =>
         prev.map((item) =>
           item.id === entryModalTarget.id
-            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus }
+            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined }
             : item,
         ),
       );
@@ -237,10 +260,15 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       setReviewElements((prev) =>
         prev.map((item) =>
           item.id === entryModalTarget.id
-            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus }
+            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined }
             : item,
         ),
       );
+    }
+
+    // 确认模式下触发模拟AI检查
+    if (mode === 'confirm') {
+      simulateAiCheck(entryModalTarget.id, entryModalTarget.tab);
     }
 
     setEntryModalVisible(false);
@@ -250,9 +278,9 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     if (mode === 'draft') {
       message.success('已暂存');
     } else {
-      message.success('已确认提交，AI检查已触发');
+      message.success('已确认提交，AI检查进行中...');
     }
-  }, [entryModalTarget, entryContent, setChecklistItems, setReviewElements]);
+  }, [entryModalTarget, entryContent, setChecklistItems, setReviewElements, simulateAiCheck]);
 
   // --- Delegate modal handlers ---
 
@@ -297,6 +325,19 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   const handleSubmitReview = useCallback(() => {
     if (!effectiveRole) return;
+
+    // 二次校验：确认所有 items 都已 entered + passed
+    const roleClItems = checklistItems.filter((i) => i.responsibleRole === effectiveRole);
+    const roleReItems = reviewElements.filter((i) => i.responsibleRole === effectiveRole);
+    const allItems = [...roleClItems, ...roleReItems];
+    const allReady = allItems.length > 0 && allItems.every(
+      (i) => i.entryStatus === 'entered' && i.aiCheckStatus === 'passed',
+    );
+    if (!allReady) {
+      message.warning('仍有未完成录入或AI检查未通过的条目，请先完成所有录入');
+      return;
+    }
+
     Modal.confirm({
       title: '确认提交审核',
       content: `提交后「${effectiveRole}」角色将完成资料录入，进入维护审核阶段，确认提交？`,
@@ -321,7 +362,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         router.push(`/workbench/${id}`);
       },
     });
-  }, [effectiveRole, router, id, setChecklistItems, setReviewElements]);
+  }, [effectiveRole, router, id, setChecklistItems, setReviewElements, checklistItems, reviewElements]);
 
   // --- AI check detail ---
 
@@ -552,8 +593,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   }
 
   const selectedKeys = activeTab === 'checklist' ? selectedChecklistKeys : selectedReviewKeys;
-  const setSelectedKeys = activeTab === 'checklist' ? setSelectedChecklistKeys : setSelectedReviewKeys;
-  const currentTab = activeTab as 'checklist' | 'review';
 
   return (
     <div style={{ padding: '16px 24px', background: '#f5f5f5', minHeight: '100vh' }}>
@@ -625,7 +664,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           tabBarExtraContent={
             <Space size={8}>
               {selectedKeys.length > 0 && (
-                <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], currentTab)}>
+                <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], activeTab as 'checklist' | 'review')}>
                   全部委派 ({selectedKeys.length})
                 </Button>
               )}
@@ -764,7 +803,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           </Space>
         }
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <div>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>录入内容</div>
@@ -793,7 +832,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         okText="确认委派"
         cancelText="取消"
         width={500}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 8, color: '#666' }}>
           选择委派人员（将替换当前录入责任人）

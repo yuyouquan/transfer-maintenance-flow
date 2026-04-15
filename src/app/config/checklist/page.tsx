@@ -18,7 +18,6 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps } from 'antd';
 import {
-  ImportOutlined,
   ExportOutlined,
   DiffOutlined,
   SearchOutlined,
