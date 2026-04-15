@@ -21,8 +21,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* ===== Smooth transitions globally ===== */
-* {
+/* ===== Smooth transitions for interactive elements ===== */
+.ant-btn,
+.ant-card,
+.ant-tag,
+.ant-table-wrapper .ant-table-tbody > tr > td {
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -42,7 +45,7 @@ body {
   background: #fafbfc !important;
   font-weight: 600 !important;
   font-size: 13px !important;
-  color: #555 !important;
+  color: #333 !important;
   border-bottom: 2px solid #f0f0f0 !important;
 }
 .ant-table-wrapper .ant-table-tbody > tr > td {

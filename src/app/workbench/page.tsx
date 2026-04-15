@@ -654,7 +654,11 @@ export default function WorkbenchPage() {
               </div>
 
               {/* Todo list */}
-              <div style={{ maxHeight: 'calc(100vh - 340px)', overflowY: 'auto' }}>
+              <div style={{
+                maxHeight: 'calc(100vh - 340px)', overflowY: 'auto',
+                maskImage: 'linear-gradient(to bottom, black calc(100% - 24px), transparent)',
+                WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 24px), transparent)',
+              }}>
                 {userTodos.length === 0 ? (
                   <div style={{ padding: 40, textAlign: 'center' }}>
                     <ClockCircleOutlined style={{ fontSize: 32, color: '#d9d9d9', marginBottom: 12 }} />
