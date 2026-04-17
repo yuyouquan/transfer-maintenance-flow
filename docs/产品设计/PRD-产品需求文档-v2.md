@@ -10,6 +10,10 @@
 | 作者 | 产品经理 |
 | 状态 | 评审中 |
 | 适用前端版本 | commit b7fa37a (main) 及之后 |
+| 飞书文档 | https://www.feishu.cn/docx/AiG6dzi5WoI6HyxyrjrcOwlSnCf |
+
+> 本地 MD 为源真相；飞书文档（上方链接）由 lark-cli 从本文件导入，并内嵌 8 张画板与 31 张截图。
+> 画板在飞书文档中以 Whiteboard 块呈现，本地 MD 保留占位说明。
 
 ### 版本历史
 
@@ -123,7 +127,7 @@
 
 ### 3.4 团队-角色-管道关系
 
-> **【画板 1】团队-角色-管道关系图** · 飞书链接：`[TBD - 见飞书文档内嵌]`
+> **【画板 1】团队-角色-管道关系图** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 图示要点：在研团队（6 角色含 SQA）与维护团队（5 角色无 SQA）两列并列；5 Pipeline Role 穿过两列形成横向并行泳道；SQA 单独作为在研侧终审节点连接管道末尾。
 
@@ -148,7 +152,7 @@
 
 ### 4.1 端到端主流程
 
-> **【画板 2】端到端转维流程图** · 飞书链接：`[TBD]`
+> **【画板 2】端到端转维流程图** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 图示要点：
 > - 主路径：项目发起 → 资料录入与 AI 检查 →（5 角色并行）→ 维护审核 →（5 角色并行）→ SQA 审核 → 信息变更
@@ -159,7 +163,7 @@
 
 ### 4.2 申请 `status` 状态机
 
-> **【画板 3】转维申请 status 状态机** · 飞书链接：`[TBD]`
+> **【画板 3】转维申请 status 状态机** · 飞书链接：*（见飞书文档内嵌画板）*
 
 状态值：`in_progress | completed | cancelled | failed`
 
@@ -177,7 +181,7 @@
 
 ### 4.3 Pipeline 节点状态机
 
-> **【画板 4】Pipeline 节点状态机** · 飞书链接：`[TBD]`
+> **【画板 4】Pipeline 节点状态机** · 飞书链接：*（见飞书文档内嵌画板）*
 
 状态值：`not_started | in_progress | success | failed`（每个 Pipeline 节点独立）
 
@@ -199,7 +203,7 @@
 - **aiCheckStatus**: `not_started | in_progress | passed | failed`
 - **reviewStatus**: `not_reviewed | reviewing | passed | rejected`
 
-> **【画板 5】条目三维状态机** · 飞书链接：`[TBD]`
+> **【画板 5】条目三维状态机** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 图示要点：横向列出 entryStatus，纵向列出 aiCheckStatus，审核状态作为子泳道。标注各跃迁的操作（用户暂存 / 确认 / AI 模拟完成 / 评审通过 / 评审驳回 / 重开回填）。
 
@@ -216,7 +220,7 @@
 
 ### 4.5 重开流程时序
 
-> **【画板 6】重开流程时序图** · 飞书链接：`[TBD]`
+> **【画板 6】重开流程时序图** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 参与方：SPM 用户 → 工作台 → apply 页（重开模式）→ ApplicationContext → 后续录入页
 >
@@ -1418,7 +1422,7 @@ SQA 作为流水线质量终审。两类进入场景：
 
 ### 6.3 E-R 图
 
-> **【画板 7】数据实体关系图** · 飞书链接：`[TBD]`
+> **【画板 7】数据实体关系图** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 图示要点：
 > - TransferApplication 1-N CheckListItem / ReviewElement（按 applicationId）
@@ -1454,7 +1458,7 @@ SQA 作为流水线质量终审。两类进入场景：
 
 ### 7.2 权限可视化
 
-> **【画板 8】权限可视化** · 飞书链接：`[TBD]`
+> **【画板 8】权限可视化** · 飞书链接：*（见飞书文档内嵌画板）*
 >
 > 图示要点：以 swim-lane 展示 4 个核心角色（在研 SPM / 在研非 SPM / 维护成员 / SQA）在各 pipeline 节点能做的操作。
 
@@ -1706,3 +1710,22 @@ SQA 作为流水线质量终审。两类进入场景：
 - 截图使用 puppeteer 脚本（`scripts/take-screenshots.js`）批量生产。
 - 画板链接将在飞书文档版本中内嵌（见飞书文档顶部"画板目录"）。
 - 如发现与实际前端不符处，以代码为准，并提 issue 回来修订 PRD。
+
+---
+
+## 附：飞书画板 Token 映射
+
+本文档在飞书版本中内嵌了 8 张可编辑画板。如需直接编辑画板，可用 `lark-cli whiteboard +update` + 下表 token：
+
+| 编号 | 主题 | 画板 token |
+|------|------|-----------|
+| WB1 | 团队-角色-管道关系 | IlXtwRWaehyrKgb1lvNcC0pynJ3 |
+| WB2 | 端到端业务流程 | G2zfwc56BheahIbWD6GcGAsXnsc |
+| WB3 | 申请 status 状态机 | DpmlwbEgRhAxMabofgecta5fnFf |
+| WB4 | Pipeline 节点状态机 | FArtwGoT8hUO29bqICdcockfnM4 |
+| WB5 | 条目三维状态机 | M8J5wegCWhlHwsb6eg3cDgIbnOg |
+| WB6 | 重开流程时序 | VKjGwV6q1h1JmNb0XfscY1nCnCh |
+| WB7 | 数据实体关系 (E-R) | Yaj7wOPjYhyQdIbjFUoc9BSdnnc |
+| WB8 | 权限可视化 (swim-lane) | MPkLwg0qOhQ5qYbfo7Jc1zy2ndh |
+
+画板 token 可在 Mermaid / PlantUML 基础上迭代；文档 ID：`AiG6dzi5WoI6HyxyrjrcOwlSnCf`。
