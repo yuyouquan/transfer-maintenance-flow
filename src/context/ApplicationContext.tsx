@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type {
-  TransferApplication, CheckListItem, ReviewElement, TeamMember, PipelineRole, RoleNodeStatus,
+  TransferApplication, CheckListItem, ReviewElement, TeamMember, PipelineRole, RoleNodeStatus, AICheckStatus,
 } from '@/types';
 import {
   MOCK_APPLICATIONS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS,
@@ -141,9 +141,31 @@ interface ApplicationContextValue {
   readonly updateApplication: (id: string, updater: (app: TransferApplication) => TransferApplication) => void;
   readonly updateChecklistItems: (updater: ItemUpdater<CheckListItem>) => void;
   readonly updateReviewElements: (updater: ItemUpdater<ReviewElement>) => void;
+  readonly reopenApplication: (sourceId: string, newApp: TransferApplication) => void;
 }
 
 const ApplicationContext = createContext<ApplicationContextValue | null>(null);
+
+// --- Simulate AI check on auto-triggered items (reopen flow) ---
+// Mirrors entry page simulateAiCheck: 1-2s delay, 90% pass / 10% fail, silent (no toast).
+function scheduleAutoAiCheck<T extends CheckListItem | ReviewElement>(
+  itemId: string,
+  setter: React.Dispatch<React.SetStateAction<ReadonlyArray<T>>>,
+): void {
+  const delay = 1000 + Math.random() * 1000;
+  setTimeout(() => {
+    const passed = Math.random() > 0.1;
+    const aiCheckStatus: AICheckStatus = passed ? 'passed' : 'failed';
+    const aiCheckResult = passed
+      ? 'AI检查通过，内容符合要求。'
+      : 'AI检查不通过，请检查内容是否完整或链接是否有效。';
+    setter((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? ({ ...item, aiCheckStatus, aiCheckResult } as T) : item,
+      ),
+    );
+  }, delay);
+}
 
 export function ApplicationProvider({ children }: { readonly children: React.ReactNode }) {
   const [baseApplications, setBaseApplications] = useState<ReadonlyArray<TransferApplication>>(
@@ -241,9 +263,81 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
     setReviewElements((prev) => [...prev, ...newReviewElements]);
   }, []);
 
+  const reopenApplication = useCallback((sourceId: string, newApp: TransferApplication) => {
+    // Generate fresh items from the latest templates for the new application.
+    const freshChecklist = generateChecklistItems(
+      newApp.id, newApp.team.research, newApp.team.maintenance,
+    );
+    const freshReviewElements = generateReviewElements(
+      newApp.id, newApp.team.research, newApp.team.maintenance,
+    );
+
+    // Backfill previously-entered content keyed by business fields, so that template
+    // additions/removals are honored while preserving the user's inputs where possible.
+    let checklistAutoCheckIds: string[] = [];
+    setChecklistItems((prev) => {
+      const sourceItems = prev.filter((i) => i.applicationId === sourceId);
+      const sourceByKey = new Map(
+        sourceItems.map((i) => [`${i.type}::${i.checkItem}::${i.responsibleRole}`, i]),
+      );
+      const localIds: string[] = [];
+      const backfilled = freshChecklist.map((item) => {
+        const match = sourceByKey.get(`${item.type}::${item.checkItem}::${item.responsibleRole}`);
+        if (!match) return item;
+        const shouldAutoCheck = match.entryStatus === 'entered';
+        if (shouldAutoCheck) localIds.push(item.id);
+        return {
+          ...item,
+          entryContent: match.entryContent,
+          deliverables: match.deliverables,
+          entryStatus: match.entryStatus,
+          aiCheckStatus: shouldAutoCheck ? ('in_progress' as const) : item.aiCheckStatus,
+          aiCheckResult: shouldAutoCheck ? undefined : item.aiCheckResult,
+        };
+      });
+      checklistAutoCheckIds = localIds;
+      return [...prev, ...backfilled];
+    });
+
+    let reviewAutoCheckIds: string[] = [];
+    setReviewElements((prev) => {
+      const sourceItems = prev.filter((i) => i.applicationId === sourceId);
+      const sourceByKey = new Map(
+        sourceItems.map((i) => [`${i.standard}::${i.responsibleRole}`, i]),
+      );
+      const localIds: string[] = [];
+      const backfilled = freshReviewElements.map((item) => {
+        const match = sourceByKey.get(`${item.standard}::${item.responsibleRole}`);
+        if (!match) return item;
+        const shouldAutoCheck = match.entryStatus === 'entered';
+        if (shouldAutoCheck) localIds.push(item.id);
+        return {
+          ...item,
+          entryContent: match.entryContent,
+          deliverables: match.deliverables,
+          entryStatus: match.entryStatus,
+          aiCheckStatus: shouldAutoCheck ? ('in_progress' as const) : item.aiCheckStatus,
+          aiCheckResult: shouldAutoCheck ? undefined : item.aiCheckResult,
+        };
+      });
+      reviewAutoCheckIds = localIds;
+      return [...prev, ...backfilled];
+    });
+
+    setBaseApplications((prev) => [
+      newApp,
+      ...prev.map((app) =>
+        app.id === sourceId ? { ...app, reopenedAsId: newApp.id } : app,
+      ),
+    ]);
+
+    checklistAutoCheckIds.forEach((id) => scheduleAutoAiCheck(id, setChecklistItems));
+    reviewAutoCheckIds.forEach((id) => scheduleAutoAiCheck(id, setReviewElements));
+  }, []);
+
   const value = useMemo(
-    () => ({ applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements }),
-    [applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements],
+    () => ({ applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements, reopenApplication }),
+    [applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements, reopenApplication],
   );
 
   return (
