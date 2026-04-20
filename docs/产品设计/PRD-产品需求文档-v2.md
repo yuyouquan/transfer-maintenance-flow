@@ -44,9 +44,9 @@
 4. **质量闭环**：SQA 审核作为流水线终点质量关卡，驳回后流程终止，可由项目 SPM 重开；维护审核中途出现角色驳回时，SQA 进入"驳回处理模式"介入。
 5. **完整审计**：所有状态跃迁、委派、意见都进入历史记录（Timeline 呈现）。
 
-> **【画板 0】系统模块架构图** · *（见飞书文档内嵌画板）*
+> **【画板 0】功能模块图** · *（见飞书文档内嵌画板）*
 >
-> 图示要点：Next.js App Router Runtime（含 Providers）为入口；往下分 6 层——页面层、共享组件层、Context 状态层、Mock 数据层、类型契约层、外部依赖层。页面通过 Context 读写状态；Context 从 Mock 数据层拉取；所有组件共享类型契约；页面和共享组件都依赖外部库 Ant Design / Tailwind / Day.js。
+> 图示要点：系统由 6 大功能模块组成——工作台、申请管理、详情查看、资料录入、审核流程（含维护审核 + SQA 审核）、配置中心（含 CheckList + 评审要素两套模板）。
 
 ### 2.3 范围
 
@@ -1723,7 +1723,7 @@ SQA 作为流水线质量终审。两类进入场景：
 
 | 编号 | 主题 | 画板 token |
 |------|------|-----------|
-| WB0 | 系统模块架构（§2.2 目标下） | LnXhwsj9ahpZeobSCzPcgeGGnKe |
+| WB0 | 功能模块图（§2.2 目标下） | LnXhwsj9ahpZeobSCzPcgeGGnKe |
 | WB1 | 团队-角色-管道关系 | C9faw2DufhmqdLbhioRcvlWMnwb |
 | WB2 | 端到端业务流程 | Ua5OwMHR9hbC4abg7oKcwtwBnEb |
 | WB3 | 申请 status 状态机 | VFGuw1ciZh9ubrbCK9RclLJYnGg |
