@@ -1719,13 +1719,13 @@ SQA 作为流水线质量终审。两类进入场景：
 
 | 编号 | 主题 | 画板 token |
 |------|------|-----------|
-| WB1 | 团队-角色-管道关系 | IlXtwRWaehyrKgb1lvNcC0pynJ3 |
-| WB2 | 端到端业务流程 | G2zfwc56BheahIbWD6GcGAsXnsc |
-| WB3 | 申请 status 状态机 | DpmlwbEgRhAxMabofgecta5fnFf |
-| WB4 | Pipeline 节点状态机 | FArtwGoT8hUO29bqICdcockfnM4 |
-| WB5 | 条目三维状态机 | M8J5wegCWhlHwsb6eg3cDgIbnOg |
-| WB6 | 重开流程时序 | VKjGwV6q1h1JmNb0XfscY1nCnCh |
-| WB7 | 数据实体关系 (E-R) | Yaj7wOPjYhyQdIbjFUoc9BSdnnc |
-| WB8 | 权限可视化 (swim-lane) | MPkLwg0qOhQ5qYbfo7Jc1zy2ndh |
+| WB1 | 团队-角色-管道关系 | C9faw2DufhmqdLbhioRcvlWMnwb |
+| WB2 | 端到端业务流程 | Ua5OwMHR9hbC4abg7oKcwtwBnEb |
+| WB3 | 申请 status 状态机 | VFGuw1ciZh9ubrbCK9RclLJYnGg |
+| WB4 | Pipeline 节点状态机 | Uk4FwLa7uh7GMgbjvbtcRshlnyh |
+| WB5 | 条目三维状态机 | Vt6ywOMczhJj59bRFrKcJOGnnSg |
+| WB6 | 重开流程时序 | HC0AwTxJ4hx44KbchVZcvFQLnPb |
+| WB7 | 数据实体关系 (E-R) | D0YjwXekwhHcIjbyE2Ec0rwenue |
+| WB8 | 权限可视化 (swim-lane) | QfkdwNVAghOoetb0BSxclZQRnFb |
 
 画板 token 可在 Mermaid / PlantUML 基础上迭代；文档 ID：`AiG6dzi5WoI6HyxyrjrcOwlSnCf`。
