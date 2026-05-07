@@ -686,7 +686,7 @@ export default function SqaReviewPage({
         cancelText="取消"
         okButtonProps={{ danger: true }}
       >
-        <p>确认不通过 SQA 审核？<strong style={{ color: '#ff4d4f' }}>此操作将终止整个转维流程</strong>，申请状态变为"已失败"，不可继续审核。如需重新启动，申请人可在详情页点击"重新发起转维申请"。</p>
+        <p>确认不通过 SQA 审核？<strong style={{ color: '#ff4d4f' }}>此操作将终止整个转维流程</strong>，申请状态变为「已失败」，不可继续审核。如需重新启动，申请人可在详情页点击「重新发起转维申请」。</p>
         {!sqaComment.trim() && (
           <p style={{ color: '#ff4d4f', fontSize: 13 }}>请先在评审建议中填写不通过原因</p>
         )}
