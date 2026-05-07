@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse,
+  Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse, Badge,
 } from 'antd';
 import {
   ArrowLeftOutlined, UploadOutlined, DownloadOutlined, CheckCircleOutlined,
@@ -181,16 +181,37 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   // --- canSubmitReview: only checks own role items for effectiveRole ---
 
+  const isItemReady = (item: { entryStatus: EntryStatus; aiCheckStatus: AICheckStatus }) =>
+    item.entryStatus === 'entered' && item.aiCheckStatus === 'passed';
+
+  const pendingChecklistCount = useMemo(
+    () => ownRoleChecklist.filter((i) => !isItemReady(i)).length,
+    [ownRoleChecklist],
+  );
+  const pendingReviewCount = useMemo(
+    () => ownRoleReviewElements.filter((i) => !isItemReady(i)).length,
+    [ownRoleReviewElements],
+  );
+
   const canSubmitReview = useMemo(() => {
     if (!effectiveRole) return false;
-    const clReady = ownRoleChecklist.length === 0 || ownRoleChecklist.every(
-      (item) => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed',
-    );
-    const reReady = ownRoleReviewElements.length === 0 || ownRoleReviewElements.every(
-      (item) => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed',
-    );
-    return (ownRoleChecklist.length > 0 || ownRoleReviewElements.length > 0) && clReady && reReady;
-  }, [effectiveRole, ownRoleChecklist, ownRoleReviewElements]);
+    const hasAny = ownRoleChecklist.length > 0 || ownRoleReviewElements.length > 0;
+    return hasAny && pendingChecklistCount === 0 && pendingReviewCount === 0;
+  }, [effectiveRole, ownRoleChecklist.length, ownRoleReviewElements.length, pendingChecklistCount, pendingReviewCount]);
+
+  const submitTooltip = useMemo(() => {
+    if (!effectiveRole) return '';
+    if (canSubmitReview) {
+      return `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核`;
+    }
+    if (ownRoleChecklist.length === 0 && ownRoleReviewElements.length === 0) {
+      return `「${effectiveRole}」角色没有任何待录入条目`;
+    }
+    const parts: string[] = [];
+    if (pendingChecklistCount > 0) parts.push(`转维材料 ${pendingChecklistCount} 项`);
+    if (pendingReviewCount > 0) parts.push(`评审要素 ${pendingReviewCount} 项`);
+    return `还有未完成项：${parts.join('、')}（需录入并通过AI检查）`;
+  }, [effectiveRole, canSubmitReview, ownRoleChecklist.length, ownRoleReviewElements.length, pendingChecklistCount, pendingReviewCount]);
 
   // --- Has rejected items (own role, show block alert) ---
 
@@ -683,7 +704,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 </Button>
               )}
               {effectiveRole && (
-                <Tooltip title={canSubmitReview ? `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核` : `需要「${effectiveRole}」角色所有录入项的录入状态和AI检查都通过后才能提交`}>
+                <Tooltip title={submitTooltip}>
                   <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
                     提交{effectiveRole}审核
                   </Button>
@@ -696,7 +717,16 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           items={[
             {
               key: 'checklist',
-              label: `转维材料 (${ownRoleChecklist.length})`,
+              label: (
+                <Space size={6}>
+                  <span>转维材料 ({ownRoleChecklist.length})</span>
+                  {pendingChecklistCount > 0 && (
+                    <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
+                      <Badge count={pendingChecklistCount} size="small" />
+                    </Tooltip>
+                  )}
+                </Space>
+              ),
               children: (
                 <>
                   <Table<CheckListItem>
@@ -742,7 +772,16 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
             },
             {
               key: 'review',
-              label: `评审要素 (${ownRoleReviewElements.length})`,
+              label: (
+                <Space size={6}>
+                  <span>评审要素 ({ownRoleReviewElements.length})</span>
+                  {pendingReviewCount > 0 && (
+                    <Tooltip title={`还有 ${pendingReviewCount} 项未录入或AI检查未通过`}>
+                      <Badge count={pendingReviewCount} size="small" />
+                    </Tooltip>
+                  )}
+                </Space>
+              ),
               children: (
                 <>
                   <Table<ReviewElement>
