@@ -78,6 +78,7 @@ const PIPELINE_STATUS_CONFIG: Record<string, { color: string; label: string }> =
   in_progress: { color: 'blue', label: '进行中' },
   completed: { color: 'green', label: '已完成' },
   cancelled: { color: 'red', label: '已取消' },
+  failed: { color: 'red', label: '已失败' },
 };
 
 const BLOCK_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
@@ -298,17 +299,18 @@ export default function SqaReviewPage({
       message.warning('请填写SQA评审建议');
       return;
     }
-    // SQA 不通过：回退到维护审核阶段，不取消流水线
+    // SQA 不通过即终态：整个转维流程失败并结束
     updateApplication(id, (app) => ({
       ...app,
+      status: 'failed',
+      failureReason: sqaComment.trim(),
       pipeline: {
         ...app.pipeline,
         sqaReview: 'failed',
-        maintenanceReview: 'in_progress',
       },
       updatedAt: new Date().toISOString(),
     }));
-    message.success('SQA审核不通过，已回退到维护审核阶段');
+    message.success('SQA审核不通过，转维流程已终止');
     setRejectModalVisible(false);
     router.push(`/workbench/${id}`);
   }, [id, sqaComment, updateApplication, router]);
@@ -456,8 +458,10 @@ export default function SqaReviewPage({
   const anyRoleRejected = application.pipeline.roleProgress.some((rp) => rp.reviewStatus === 'rejected');
   // 拒绝模式：维护审核中有角色被拒绝，SQA只能执行不通过
   const isRejectionMode = application.pipeline.maintenanceReview === 'in_progress' && anyRoleRejected;
-  // 可操作：正常SQA审核进行中 或 拒绝模式
-  const canOperate = isSqaInProgress || isRejectionMode;
+  // 申请已终止（失败/已完成/已取消）则不可操作
+  const isTerminated = application.status !== 'in_progress';
+  // 可操作：未终止 且（正常SQA审核进行中 或 拒绝模式）
+  const canOperate = !isTerminated && (isSqaInProgress || isRejectionMode);
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
@@ -615,8 +619,8 @@ export default function SqaReviewPage({
           <Alert
             type="warning"
             showIcon
-            message="当前处于驳回处理模式"
-            description="维护审核中有角色被拒绝，请审核拒绝情况后决定是否终止流水线并回退到维护审核阶段。"
+            title="当前处于驳回处理模式"
+            description="维护审核中有角色被拒绝，请核实情况后决定是否终止转维流程。SQA 不通过后流程将直接终止，申请人可在详情页发起重开。"
             style={{ marginBottom: 16 }}
           />
         )}
@@ -682,7 +686,7 @@ export default function SqaReviewPage({
         cancelText="取消"
         okButtonProps={{ danger: true }}
       >
-        <p>确认不通过SQA审核？不通过将回退到维护审核阶段，相关角色需重新审核。</p>
+        <p>确认不通过 SQA 审核？<strong style={{ color: '#ff4d4f' }}>此操作将终止整个转维流程</strong>，申请状态变为"已失败"，不可继续审核。如需重新启动，申请人可在详情页点击"重新发起转维申请"。</p>
         {!sqaComment.trim() && (
           <p style={{ color: '#ff4d4f', fontSize: 13 }}>请先在评审建议中填写不通过原因</p>
         )}

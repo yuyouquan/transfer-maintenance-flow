@@ -20,7 +20,7 @@ export type AICheckStatus = 'not_started' | 'in_progress' | 'passed' | 'failed';
 export type ReviewStatus = 'not_reviewed' | 'reviewing' | 'passed' | 'rejected';
 
 /** 流水线整体状态 */
-export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled';
+export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
 /** 角色类型 */
 export type RoleType = 'SPM' | 'TPM' | 'SQA' | '底软' | '系统' | '影像';
@@ -39,6 +39,7 @@ export interface TeamMember {
   readonly role: RoleType;
   readonly avatar?: string;
   readonly department?: string;
+  readonly isAdmin?: boolean;
 }
 
 export interface ProjectTeam {
@@ -68,6 +69,9 @@ export interface TransferApplication {
   readonly remark: string;
   readonly status: PipelineStatus;
   readonly cancelReason?: string;
+  readonly failureReason?: string;
+  readonly predecessorId?: string;
+  readonly reopenedAsId?: string;
   readonly pipeline: PipelineState;
   readonly createdAt: string;
   readonly updatedAt: string;

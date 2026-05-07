@@ -5,7 +5,7 @@ import type { TeamMember, Project, ProjectTeam } from '@/types';
 // ============================================================
 
 export const MOCK_USERS: ReadonlyArray<TeamMember> = [
-  { id: 'u001', name: '张三', role: 'SPM', avatar: '', department: '项目管理部' },
+  { id: 'u001', name: '张三', role: 'SPM', avatar: '', department: '项目管理部', isAdmin: true },
   { id: 'u002', name: '李四', role: 'TPM', avatar: '', department: '测试部' },
   { id: 'u003', name: '王五', role: 'SQA', avatar: '', department: '质量部' },
   { id: 'u004', name: '赵六', role: '底软', avatar: '', department: '底软开发部' },

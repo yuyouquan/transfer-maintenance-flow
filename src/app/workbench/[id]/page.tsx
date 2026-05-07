@@ -26,6 +26,7 @@ import {
   StopOutlined,
   PushpinOutlined,
   HistoryOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -35,6 +36,7 @@ import {
   MOCK_HISTORY,
 } from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
+import { useCurrentUser } from '@/context/UserContext';
 import type {
   CheckListItem,
   ReviewElement,
@@ -74,6 +76,7 @@ const PIPELINE_STATUS_CONFIG: Record<string, { color: string; label: string }> =
   in_progress: { color: 'blue', label: '进行中' },
   completed: { color: 'green', label: '已完成' },
   cancelled: { color: 'red', label: '已取消' },
+  failed: { color: 'red', label: '已失败' },
 };
 
 const BLOCK_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
@@ -298,6 +301,7 @@ export default function ApplicationDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview } = useApplications();
+  const { currentUser } = useCurrentUser();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalContent, setModalContent] = useState('');
@@ -650,6 +654,48 @@ export default function ApplicationDetailPage({
           style={{ marginBottom: 20 }}
         />
       )}
+
+      {/* SQA 驳回失败横幅 */}
+      {application.status === 'failed' && (() => {
+        const isProjectSPM = application.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+        const isAdmin = currentUser.isAdmin === true;
+        const canReopen = !application.reopenedAsId && (isProjectSPM || isAdmin);
+        return (
+          <Alert
+            title="SQA 审核未通过，转维流程已终止"
+            description={
+              <div>
+                <div style={{ marginBottom: 6 }}>
+                  SQA 评审意见：{application.failureReason ?? '（未填写）'}
+                </div>
+                {application.reopenedAsId ? (
+                  <div style={{ color: '#666', fontSize: 13 }}>
+                    本申请已重新发起新的转维流程
+                  </div>
+                ) : canReopen ? (
+                  <Button
+                    type="primary"
+                    danger
+                    size="small"
+                    icon={<RedoOutlined />}
+                    onClick={() => router.push(`/workbench/apply?from=${application.id}`)}
+                    style={{ marginTop: 4 }}
+                  >
+                    重新发起转维申请
+                  </Button>
+                ) : (
+                  <div style={{ color: '#999', fontSize: 12 }}>
+                    如需重新发起，请联系该项目的 SPM 或系统管理员
+                  </div>
+                )}
+              </div>
+            }
+            type="error"
+            showIcon
+            style={{ marginBottom: 20 }}
+          />
+        );
+      })()}
 
       <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
         {/* 左侧主内容 */}
