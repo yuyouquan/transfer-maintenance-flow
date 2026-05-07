@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  message, Tooltip, Divider,
+  message, Tooltip, Divider, Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
@@ -349,6 +349,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       <div style={{ padding: 40, textAlign: 'center' }}>
         <h2>未找到转维申请</h2>
         <Button onClick={() => router.push('/workbench')}>返回</Button>
+      </div>
+    );
+  }
+
+  if (application.status !== 'in_progress') {
+    const statusText = application.status === 'failed'
+      ? 'SQA 审核未通过，流程已终止'
+      : application.status === 'cancelled'
+        ? '该转维申请已取消'
+        : '该转维申请已完成';
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert
+          type="warning"
+          showIcon
+          title={statusText}
+          description="不可再进行审核操作"
+          style={{ maxWidth: 560, margin: '0 auto 16px' }}
+        />
+        <Button onClick={() => router.push(`/workbench/${id}`)}>返回详情</Button>
       </div>
     );
   }

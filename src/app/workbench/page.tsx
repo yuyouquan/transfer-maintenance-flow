@@ -9,7 +9,8 @@ import {
   PlusOutlined, FileTextOutlined, EditOutlined,
   AuditOutlined, CloseCircleOutlined, RightOutlined, LeftOutlined,
   CarryOutOutlined, ProjectOutlined, SyncOutlined, CheckCircleOutlined,
-  StopOutlined, ClockCircleOutlined, SafetyOutlined,
+  StopOutlined, ClockCircleOutlined, SafetyOutlined, RedoOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type {
@@ -45,7 +46,7 @@ const ROLE_DISPLAY_MAP: Record<string, string> = {
   SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
-type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled';
+type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
 // --- Helpers ---
 
@@ -253,6 +254,7 @@ export default function WorkbenchPage() {
     inProgress: allApplications.filter((a) => a.status === 'in_progress').length,
     completed: allApplications.filter((a) => a.status === 'completed').length,
     cancelled: allApplications.filter((a) => a.status === 'cancelled').length,
+    failed: allApplications.filter((a) => a.status === 'failed').length,
   }), [allApplications]);
 
   const filteredApplications = useMemo(() => {
@@ -273,8 +275,15 @@ export default function WorkbenchPage() {
   }, [filteredApplications, currentPage]);
 
   const userTodos = useMemo(() => {
-    return MOCK_TODOS.filter((todo) => todo.responsiblePerson === currentUser.name);
-  }, [currentUser.name]);
+    const terminatedIds = new Set(
+      allApplications
+        .filter((a) => a.status !== 'in_progress')
+        .map((a) => a.id),
+    );
+    return MOCK_TODOS.filter(
+      (todo) => todo.responsiblePerson === currentUser.name && !terminatedIds.has(todo.applicationId),
+    );
+  }, [currentUser.name, allApplications]);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -292,6 +301,7 @@ export default function WorkbenchPage() {
   const handleNavigateToReview = useCallback((id: string) => { router.push(`/workbench/${id}/review`); }, [router]);
   const handleNavigateToSqaReview = useCallback((id: string) => { router.push(`/workbench/${id}/sqa-review`); }, [router]);
   const handleNavigateToApply = useCallback(() => { router.push('/workbench/apply'); }, [router]);
+  const handleReopen = useCallback((id: string) => { router.push(`/workbench/apply?from=${id}`); }, [router]);
 
   const handleOpenCloseModal = useCallback((app: TransferApplication) => {
     setCloseTargetApp(app);
@@ -349,39 +359,49 @@ export default function WorkbenchPage() {
   const columns: ColumnsType<TransferApplication> = [
     {
       title: '项目名称', dataIndex: 'projectName', key: 'projectName', width: 260,
-      render: (text: string, record: TransferApplication) => (
-        <div
-          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-          onClick={() => handleNavigateToDetail(record.id)}
-        >
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: record.status === 'cancelled' ? '#f5f5f5' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: record.status === 'cancelled' ? '#bbb' : '#fff',
-            fontSize: 14, fontWeight: 600, flexShrink: 0,
-          }}>
-            {text.charAt(0)}
-          </div>
-          <div style={{ minWidth: 0 }}>
+      render: (text: string, record: TransferApplication) => {
+        const isInactive = record.status === 'cancelled' || record.status === 'failed';
+        return (
+          <div
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+            onClick={() => handleNavigateToDetail(record.id)}
+          >
             <div style={{
-              fontWeight: 600, fontSize: 13, color: record.status === 'cancelled' ? '#999' : '#1a1a2e',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              width: 32, height: 32, borderRadius: 8,
+              background: isInactive ? '#f5f5f5' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: isInactive ? '#bbb' : '#fff',
+              fontSize: 14, fontWeight: 600, flexShrink: 0,
             }}>
-              {text}
+              {text.charAt(0)}
             </div>
-            <div style={{ fontSize: 11, color: '#999' }}>
-              {record.applicant} · {new Date(record.updatedAt).toLocaleDateString('zh-CN')}
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                fontWeight: 600, fontSize: 13, color: isInactive ? '#999' : '#1a1a2e',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {text}
+              </div>
+              <div style={{ fontSize: 11, color: '#999' }}>
+                {record.applicant} · {new Date(record.updatedAt).toLocaleDateString('zh-CN')}
+              </div>
             </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: '流水线进度', key: 'pipeline', width: 280,
       render: (_: unknown, record: TransferApplication) => {
         if (record.status === 'cancelled') {
           return <Tag color="default" icon={<StopOutlined />}>已关闭</Tag>;
+        }
+        if (record.status === 'failed') {
+          return (
+            <Tooltip title={record.failureReason ? `SQA 驳回：${record.failureReason}` : 'SQA 审核未通过，流程已终止'}>
+              <Tag color="error" icon={<ExclamationCircleOutlined />}>已失败</Tag>
+            </Tooltip>
+          );
         }
         return <MiniPipeline app={record} userId={currentUser.id} />;
       },
@@ -398,7 +418,7 @@ export default function WorkbenchPage() {
     {
       title: '角色进度', key: 'roleProgress', width: 200,
       render: (_: unknown, record: TransferApplication) => {
-        if (record.status === 'cancelled') return <Text type="secondary">-</Text>;
+        if (record.status === 'cancelled' || record.status === 'failed') return <Text type="secondary">-</Text>;
         return (
           <Space size={4} wrap>
             {record.pipeline.roleProgress.map((rp) => {
@@ -423,6 +443,8 @@ export default function WorkbenchPage() {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
         const isSQA = record.team.research.some((m) => m.role === 'SQA' && m.id === currentUser.id);
+        const isProjectSPM = record.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+        const isAdmin = currentUser.isAdmin === true;
 
         const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
         // 当角色审核被拒绝时，即使dataEntry=success，研发侧也需要重新修改资料
@@ -470,6 +492,9 @@ export default function WorkbenchPage() {
           !anyRoleActivelyReviewing && isApplicant
         );
 
+        // 重开按钮：失败状态且未被重开过，项目 SPM 或管理员可重新发起
+        const showReopen = record.status === 'failed' && !record.reopenedAsId && (isProjectSPM || isAdmin);
+
         return (
           <Space size={4}>
             <Button type="text" size="small" icon={<FileTextOutlined />}
@@ -502,6 +527,13 @@ export default function WorkbenchPage() {
               <Button type="text" size="small" danger icon={<CloseCircleOutlined />}
                 onClick={() => handleOpenCloseModal(record)}>
                 关闭
+              </Button>
+            )}
+            {showReopen && (
+              <Button type="text" size="small" icon={<RedoOutlined />}
+                style={{ color: '#fa541c' }}
+                onClick={() => handleReopen(record.id)}>
+                重开
               </Button>
             )}
           </Space>
@@ -552,6 +584,11 @@ export default function WorkbenchPage() {
           title="已关闭" count={stats.cancelled}
           icon={<StopOutlined />} color="#8c8c8c" bgColor="#fafafa"
           active={statusFilter === 'cancelled'} onClick={() => handleStatusFilter('cancelled')}
+        />
+        <StatCard
+          title="已失败" count={stats.failed}
+          icon={<ExclamationCircleOutlined />} color="#ff4d4f" bgColor="#fff1f0"
+          active={statusFilter === 'failed'} onClick={() => handleStatusFilter('failed')}
         />
       </div>
 

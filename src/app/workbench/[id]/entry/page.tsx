@@ -592,6 +592,20 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }
 
+  if (application.status !== 'in_progress') {
+    const statusText = application.status === 'failed'
+      ? 'SQA 审核未通过，流程已终止'
+      : application.status === 'cancelled'
+        ? '该转维申请已取消'
+        : '该转维申请已完成';
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert type="warning" showIcon title={statusText} description="不可再进行资料录入操作" style={{ maxWidth: 560, margin: '0 auto 16px' }} />
+        <Button onClick={() => router.push(`/workbench/${id}`)}>返回详情</Button>
+      </div>
+    );
+  }
+
   const selectedKeys = activeTab === 'checklist' ? selectedChecklistKeys : selectedReviewKeys;
 
   return (
@@ -637,7 +651,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message="维护审核不通过，存在未解决的Block任务"
+          title="维护审核不通过，存在未解决的Block任务"
           description={
             <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
               {blockTasks.map((bt) => (

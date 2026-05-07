@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, Suspense } from 'react';
 import {
   Form,
   Select,
@@ -17,13 +17,15 @@ import {
   Space,
   Descriptions,
   Tag,
+  Alert,
 } from 'antd';
 import {
   UserOutlined,
   ArrowLeftOutlined,
   SwapOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MOCK_PROJECTS, MOCK_USERS } from '@/mock';
 import dayjs from 'dayjs';
 import type { Project, TeamMember, RoleType, TransferApplication } from '@/types';
@@ -203,10 +205,12 @@ function GuideCardItem({ card }: GuideCardItemProps) {
 
 // --- 主页面组件 ---
 
-export default function ApplyPage() {
+function ApplyPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromId = searchParams?.get('from') ?? null;
   const { currentUser } = useCurrentUser();
-  const { applications, addApplication } = useApplications();
+  const { applications, addApplication, reopenApplication } = useApplications();
   const [form] = Form.useForm<ApplyFormValues>();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -215,11 +219,26 @@ export default function ApplyPage() {
   const [researchMembers, setResearchMembers] = useState<ReadonlyArray<{ role: RoleType; member: TeamMember | null }>>([]);
   const [maintenanceMembers, setMaintenanceMembers] = useState<ReadonlyArray<{ role: RoleType; member: TeamMember | null }>>([]);
 
-  // Projects with active (non-cancelled) applications cannot be selected again
+  // Source application when reopening a failed flow
+  const sourceApp = useMemo(
+    () => (fromId ? applications.find((a) => a.id === fromId) : undefined),
+    [fromId, applications],
+  );
+  const isReopen = Boolean(sourceApp);
+
+  // Guard: reopening requires project SPM or admin permission
+  const canReopenSource = useMemo(() => {
+    if (!sourceApp) return false;
+    if (currentUser.isAdmin) return true;
+    return sourceApp.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+  }, [sourceApp, currentUser]);
+
+  // Projects with active (in_progress/completed) applications cannot be selected again.
+  // Failed/cancelled applications do not block re-apply.
   const activeProjectIds = useMemo(
     () => new Set(
       applications
-        .filter((a) => a.status !== 'cancelled')
+        .filter((a) => a.status === 'in_progress' || a.status === 'completed')
         .map((a) => a.projectId),
     ),
     [applications],
@@ -278,6 +297,34 @@ export default function ApplyPage() {
     setResearchMembers([]);
     setMaintenanceMembers([]);
   }, []);
+
+  // Pre-fill form when reopening from a failed application
+  useEffect(() => {
+    if (!sourceApp) return;
+    setSelectedProjectId(sourceApp.projectId);
+    form.setFieldsValue({
+      projectId: sourceApp.projectId,
+      plannedReviewDate: sourceApp.plannedReviewDate ? dayjs(sourceApp.plannedReviewDate) : undefined,
+      remark: sourceApp.remark,
+    });
+
+    const researchRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
+    const maintenanceRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
+    for (const role of PAIRED_ROLES) {
+      researchRows.push({
+        role,
+        member: sourceApp.team.research.find((m) => m.role === role) ?? null,
+      });
+      maintenanceRows.push({
+        role,
+        member: sourceApp.team.maintenance.find((m) => m.role === role) ?? null,
+      });
+    }
+    const sqa = sourceApp.team.research.find((m) => m.role === 'SQA') ?? null;
+    researchRows.push({ role: 'SQA', member: sqa });
+    setResearchMembers(researchRows);
+    setMaintenanceMembers(maintenanceRows);
+  }, [sourceApp, form]);
 
   const handleChangeMember = useCallback(
     (teamType: 'research' | 'maintenance', role: RoleType, userId: string | null) => {
@@ -341,6 +388,7 @@ export default function ApplyPage() {
             : '',
           remark: values.remark ?? '',
           status: 'in_progress',
+          predecessorId: sourceApp?.id,
           pipeline: {
             projectInit: 'success',
             dataEntry: 'in_progress',
@@ -359,8 +407,13 @@ export default function ApplyPage() {
           updatedAt: now,
         };
 
-        addApplication(newApp);
-        message.success('转维申请提交成功！');
+        if (sourceApp) {
+          reopenApplication(sourceApp.id, newApp);
+          message.success('转维申请已重新发起，之前录入的内容已保留');
+        } else {
+          addApplication(newApp);
+          message.success('转维申请提交成功！');
+        }
         router.push('/workbench');
       } catch {
         message.error('提交失败，请重试');
@@ -368,7 +421,7 @@ export default function ApplyPage() {
         setSubmitting(false);
       }
     },
-    [router, selectedProject, currentUser, researchMembers, maintenanceMembers, addApplication]
+    [router, selectedProject, currentUser, researchMembers, maintenanceMembers, addApplication, reopenApplication, sourceApp]
   );
 
   const handleCancel = useCallback(() => {
@@ -378,6 +431,19 @@ export default function ApplyPage() {
   const spmMember = selectedProject?.team.research.find(
     (m) => m.role === 'SPM'
   );
+
+  // Block unauthorized reopen access (direct URL typing)
+  if (isReopen && sourceApp && (!canReopenSource || sourceApp.reopenedAsId)) {
+    const reason = sourceApp.reopenedAsId
+      ? '该申请已被重新发起过，不能再次重开'
+      : '只有该项目的 SPM 或系统管理员可以重新发起转维申请';
+    return (
+      <div style={{ maxWidth: 560, margin: '40px auto', textAlign: 'center' }}>
+        <Alert type="warning" showIcon title="无权限重新发起" description={reason} style={{ marginBottom: 16 }} />
+        <Button onClick={() => router.push(`/workbench/${sourceApp.id}`)}>返回详情</Button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -401,9 +467,31 @@ export default function ApplyPage() {
             style={{ padding: '4px 8px' }}
           />
           <Title level={4} style={{ margin: 0 }}>
-            项目转维申请
+            {isReopen ? '重新发起转维申请' : '项目转维申请'}
           </Title>
+          {isReopen && (
+            <Tag icon={<RedoOutlined />} color="orange" style={{ marginLeft: 4 }}>
+              重开
+            </Tag>
+          )}
         </div>
+
+        {isReopen && sourceApp && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 20 }}
+            title="基于已终止的转维申请重新发起"
+            description={
+              <div style={{ fontSize: 13 }}>
+                <div>原申请 SQA 驳回原因：{sourceApp.failureReason ?? '（无）'}</div>
+                <div style={{ marginTop: 4, color: '#666' }}>
+                  发起后将按最新的 CheckList 与评审要素模板创建新流水线；已录入过的项会自动回填，模板新增的项为空白，模板删除的项将不再出现。AI 检查与维护审核结果会清空，由各角色负责人重新提交。
+                </div>
+              </div>
+            }
+          />
+        )}
 
         <Form
           form={form}
@@ -417,6 +505,7 @@ export default function ApplyPage() {
             label="项目选择"
             name="projectId"
             rules={[{ required: true, message: '请选择项目' }]}
+            extra={isReopen ? '重开流程锁定原项目，如需更换请返回发起新申请' : undefined}
           >
             <Select
               placeholder="请搜索并选择项目"
@@ -424,8 +513,9 @@ export default function ApplyPage() {
               optionFilterProp="label"
               options={projectOptions}
               onChange={handleProjectChange}
-              allowClear
+              allowClear={!isReopen}
               onClear={handleClearProject}
+              disabled={isReopen}
             />
           </Form.Item>
 
@@ -663,5 +753,13 @@ export default function ApplyPage() {
         </Form>
       </Card>
     </div>
+  );
+}
+
+export default function ApplyPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: '#999' }}>加载中...</div>}>
+      <ApplyPageContent />
+    </Suspense>
   );
 }
