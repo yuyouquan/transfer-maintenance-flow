@@ -2,10 +2,10 @@
 
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type {
-  TransferApplication, CheckListItem, ReviewElement, TeamMember, PipelineRole, RoleNodeStatus, AICheckStatus,
+  TransferApplication, CheckListItem, ReviewElement, TeamMember, PipelineRole, RoleNodeStatus, AICheckStatus, BlockTask, LegacyTask, HistoryRecord,
 } from '@/types';
 import {
-  MOCK_APPLICATIONS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS,
+  MOCK_APPLICATIONS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS, MOCK_BLOCK_TASKS, MOCK_LEGACY_TASKS, MOCK_HISTORY,
 } from '@/mock';
 import { MOCK_CHECKLIST_TEMPLATES } from '@/mock/checklist-template';
 import { MOCK_REVIEW_ELEMENT_TEMPLATES } from '@/mock/review-element-template';
@@ -137,10 +137,16 @@ interface ApplicationContextValue {
   readonly applications: ReadonlyArray<TransferApplication>;
   readonly checklistItems: ReadonlyArray<CheckListItem>;
   readonly reviewElements: ReadonlyArray<ReviewElement>;
+  readonly blockTasks: ReadonlyArray<BlockTask>;
+  readonly legacyTasks: ReadonlyArray<LegacyTask>;
+  readonly history: ReadonlyArray<HistoryRecord>;
   readonly addApplication: (app: TransferApplication) => void;
   readonly updateApplication: (id: string, updater: (app: TransferApplication) => TransferApplication) => void;
   readonly updateChecklistItems: (updater: ItemUpdater<CheckListItem>) => void;
   readonly updateReviewElements: (updater: ItemUpdater<ReviewElement>) => void;
+  readonly updateBlockTasks: (updater: ItemUpdater<BlockTask>) => void;
+  readonly updateLegacyTasks: (updater: ItemUpdater<LegacyTask>) => void;
+  readonly addHistoryRecord: (record: Omit<HistoryRecord, 'id' | 'timestamp'>) => void;
   readonly reopenApplication: (sourceId: string, newApp: TransferApplication) => void;
 }
 
@@ -176,6 +182,15 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
   );
   const [reviewElements, setReviewElements] = useState<ReadonlyArray<ReviewElement>>(
     () => [...MOCK_REVIEW_ELEMENTS],
+  );
+  const [blockTasks, setBlockTasks] = useState<ReadonlyArray<BlockTask>>(
+    () => [...MOCK_BLOCK_TASKS],
+  );
+  const [legacyTasks, setLegacyTasks] = useState<ReadonlyArray<LegacyTask>>(
+    () => [...MOCK_LEGACY_TASKS],
+  );
+  const [history, setHistory] = useState<ReadonlyArray<HistoryRecord>>(
+    () => [...MOCK_HISTORY],
   );
 
   // Derive applications with synced roleProgress from items (no useEffect needed)
@@ -244,6 +259,28 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
   const updateReviewElements = useCallback((updater: ItemUpdater<ReviewElement>) => {
     setReviewElements(updater);
   }, []);
+
+  const updateBlockTasks = useCallback((updater: ItemUpdater<BlockTask>) => {
+    setBlockTasks(updater);
+  }, []);
+
+  const updateLegacyTasks = useCallback((updater: ItemUpdater<LegacyTask>) => {
+    setLegacyTasks(updater);
+  }, []);
+
+  const addHistoryRecord = useCallback(
+    (record: Omit<HistoryRecord, 'id' | 'timestamp'>) => {
+      setHistory((prev) => [
+        ...prev,
+        {
+          ...record,
+          id: `h-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    },
+    [],
+  );
 
   const updateApplication = useCallback((id: string, updater: (app: TransferApplication) => TransferApplication) => {
     setBaseApplications((prev) => prev.map((app) => app.id === id ? updater(app) : app));
@@ -336,8 +373,8 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
   }, []);
 
   const value = useMemo(
-    () => ({ applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements, reopenApplication }),
-    [applications, checklistItems, reviewElements, addApplication, updateApplication, updateChecklistItems, updateReviewElements, reopenApplication],
+    () => ({ applications, checklistItems, reviewElements, blockTasks, legacyTasks, history, addApplication, updateApplication, updateChecklistItems, updateReviewElements, updateBlockTasks, updateLegacyTasks, addHistoryRecord, reopenApplication }),
+    [applications, checklistItems, reviewElements, blockTasks, legacyTasks, history, addApplication, updateApplication, updateChecklistItems, updateReviewElements, updateBlockTasks, updateLegacyTasks, addHistoryRecord, reopenApplication],
   );
 
   return (

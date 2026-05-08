@@ -157,6 +157,7 @@ export interface Deliverable {
 export interface BlockTask {
   readonly id: string;
   readonly applicationId: string;
+  readonly responsibleRole: PipelineRole;
   readonly description: string;
   readonly resolution: string;
   readonly responsiblePerson: string;

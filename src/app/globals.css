@@ -118,3 +118,33 @@ body {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ===== Rejection collapse panel ===== */
+.rejection-collapse.ant-collapse > .ant-collapse-item {
+  border-bottom: none !important;
+}
+.rejection-collapse.ant-collapse > .ant-collapse-item > .ant-collapse-header {
+  padding: 14px 18px !important;
+  background: transparent !important;
+  align-items: center !important;
+}
+.rejection-collapse.ant-collapse
+  > .ant-collapse-item
+  > .ant-collapse-content {
+  background: transparent !important;
+  border-top: 1px dashed #ffccc7 !important;
+}
+.rejection-collapse.ant-collapse
+  > .ant-collapse-item
+  > .ant-collapse-content
+  > .ant-collapse-content-box {
+  padding: 14px 18px !important;
+}
+.rejection-collapse .ant-collapse-expand-icon {
+  color: #ff4d4f !important;
+}
+.rejection-collapse .ant-table-thead > tr > th {
+  background: #fff5f5 !important;
+  color: #595959 !important;
+  font-weight: 500 !important;
+}

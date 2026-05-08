@@ -12,7 +12,7 @@ import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
-import { MOCK_USERS, MOCK_BLOCK_TASKS } from '@/mock';
+import { MOCK_USERS } from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
 import type {
   CheckListItem, ReviewElement, EntryStatus, AICheckStatus, ReviewStatus, PipelineRole,
@@ -61,7 +61,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const { currentUser } = useCurrentUser();
   const {
     applications, checklistItems: allCtxChecklist, reviewElements: allCtxReview,
-    updateChecklistItems, updateReviewElements,
+    blockTasks: allCtxBlockTasks,
+    updateChecklistItems, updateReviewElements, updateBlockTasks, addHistoryRecord,
   } = useApplications();
 
   // Find application from context
@@ -150,10 +151,14 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }, [reviewElements, userResponsibleRoles, currentUser.id]);
 
-  // Block tasks for rejected alert
+  // Block tasks for current role (open only) — driven by context so they update on resolve
   const blockTasks = useMemo(
-    () => MOCK_BLOCK_TASKS.filter((t) => t.applicationId === id && t.status === 'open'),
-    [id],
+    () => allCtxBlockTasks.filter(
+      (t) => t.applicationId === id
+        && t.responsibleRole === effectiveRole
+        && t.status === 'open',
+    ),
+    [allCtxBlockTasks, id, effectiveRole],
   );
 
 
@@ -221,6 +226,13 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [ownRoleChecklist, ownRoleReviewElements],
   );
 
+  // 角色级驳回评审意见：同一次驳回事件下所有被驳回项 reviewComment 一致，取首个非空即可
+  const roleReviewComment = useMemo(() => {
+    const all = [...ownRoleChecklist, ...ownRoleReviewElements];
+    const rejected = all.find((i) => i.reviewStatus === 'rejected' && i.reviewComment);
+    return rejected?.reviewComment ?? '';
+  }, [ownRoleChecklist, ownRoleReviewElements]);
+
   // --- Entry modal handlers ---
 
   const openEntryModal = useCallback((itemId: string, tab: 'checklist' | 'review') => {
@@ -269,11 +281,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     const newEntryStatus: EntryStatus = mode === 'draft' ? 'draft' : 'entered';
     const newAiCheckStatus: AICheckStatus = mode === 'confirm' ? 'in_progress' : 'not_started';
 
+    // 若该项之前被维护审核驳回，重新录入后回到「待审核」状态，
+    // 同时清掉旧的评审意见，避免对新内容产生误导。
+    const resetReviewIfRejected = <T extends { reviewStatus: ReviewStatus; reviewComment?: string }>(
+      item: T,
+    ): T => (
+      item.reviewStatus === 'rejected'
+        ? { ...item, reviewStatus: 'not_reviewed' as const, reviewComment: undefined }
+        : item
+    );
+
     if (entryModalTarget.tab === 'checklist') {
       setChecklistItems((prev) =>
         prev.map((item) =>
           item.id === entryModalTarget.id
-            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined }
+            ? resetReviewIfRejected({ ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined })
             : item,
         ),
       );
@@ -281,7 +303,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       setReviewElements((prev) =>
         prev.map((item) =>
           item.id === entryModalTarget.id
-            ? { ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined }
+            ? resetReviewIfRejected({ ...item, entryContent, entryStatus: newEntryStatus, aiCheckStatus: newAiCheckStatus, aiCheckResult: undefined })
             : item,
         ),
       );
@@ -359,10 +381,32 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       return;
     }
 
+    // 是否为驳回后的二次提交：决定弹窗文案和是否需要解决 Block 任务
+    const isResubmission = hasRejectedItems;
+    const openBlockCount = allCtxBlockTasks.filter(
+      (t) => t.applicationId === id
+        && t.responsibleRole === effectiveRole
+        && t.status === 'open',
+    ).length;
+
     Modal.confirm({
-      title: '确认提交审核',
-      content: `提交后「${effectiveRole}」角色将完成资料录入，进入维护审核阶段，确认提交？`,
-      okText: '确认提交',
+      title: isResubmission ? '确认 Block 任务已解决' : '确认提交审核',
+      content: isResubmission
+        ? (
+          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div>
+              「{effectiveRole}」角色当前共有 <strong style={{ color: '#ff4d4f' }}>{openBlockCount}</strong> 项未关闭的 Block 任务。
+            </div>
+            <div style={{ marginTop: 6 }}>
+              点击确认提交后，这些 Block 任务会被标记为「已解决」，资料进入维护审核阶段。
+            </div>
+            <div style={{ marginTop: 6, color: '#666' }}>
+              请确保所有 Block 问题都已实际处理完毕，否则维护审核仍可能再次驳回。
+            </div>
+          </div>
+        )
+        : `提交后「${effectiveRole}」角色将完成资料录入，进入维护审核阶段，确认提交？`,
+      okText: isResubmission ? '确认已解决并提交' : '确认提交',
       cancelText: '取消',
       onOk: () => {
         setChecklistItems((prev) =>
@@ -379,11 +423,38 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
               : item,
           ),
         );
-        message.success(`「${effectiveRole}」角色已提交维护审核`);
+
+        // 二次提交：把当前角色下所有 open 的 Block 任务转为 resolved
+        if (isResubmission) {
+          updateBlockTasks((prev) =>
+            prev.map((bt) =>
+              bt.applicationId === id
+              && bt.responsibleRole === effectiveRole
+              && bt.status === 'open'
+                ? { ...bt, status: 'resolved' as const }
+                : bt,
+            ),
+          );
+        }
+
+        addHistoryRecord({
+          applicationId: id,
+          action: `${effectiveRole} 资料录入与AI检查完毕`,
+          operator: currentUser.name,
+          detail: isResubmission
+            ? `${effectiveRole} 角色按驳回意见修改资料，重新通过 AI 检查并提交维护审核（${openBlockCount} 项 Block 任务标记为已解决）`
+            : `${effectiveRole} 角色资料全部录入并通过 AI 检查，已提交维护审核`,
+        });
+
+        message.success(
+          isResubmission
+            ? `「${effectiveRole}」角色已提交维护审核，${openBlockCount} 项 Block 任务标记为已解决`
+            : `「${effectiveRole}」角色已提交维护审核`,
+        );
         router.push(`/workbench/${id}`);
       },
     });
-  }, [effectiveRole, router, id, setChecklistItems, setReviewElements, checklistItems, reviewElements]);
+  }, [effectiveRole, router, id, setChecklistItems, setReviewElements, checklistItems, reviewElements, hasRejectedItems, allCtxBlockTasks, updateBlockTasks, addHistoryRecord, currentUser.name]);
 
   // --- AI check detail ---
 
@@ -485,16 +556,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: '操作', key: 'actions', width: 130, align: 'center', fixed: 'right',
-      render: (_, record) => (
-        <Space size={4}>
-          <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'checklist')}>
-            录入
-          </Button>
-          <Button type="link" size="small" onClick={() => openDelegateModal([record.id], 'checklist')}>
-            委派
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => {
+        if (record.reviewStatus === 'passed') {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'checklist')}>
+              录入
+            </Button>
+            <Button type="link" size="small" onClick={() => openDelegateModal([record.id], 'checklist')}>
+              委派
+            </Button>
+          </Space>
+        );
+      },
     },
   ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps]);
 
@@ -589,16 +665,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: '操作', key: 'actions', width: 130, align: 'center', fixed: 'right',
-      render: (_, record) => (
-        <Space size={4}>
-          <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'review')}>
-            录入
-          </Button>
-          <Button type="link" size="small" onClick={() => openDelegateModal([record.id], 'review')}>
-            委派
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => {
+        if (record.reviewStatus === 'passed') {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'review')}>
+              录入
+            </Button>
+            <Button type="link" size="small" onClick={() => openDelegateModal([record.id], 'review')}>
+              委派
+            </Button>
+          </Space>
+        );
+      },
     },
   ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps]);
 
@@ -666,23 +747,92 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         <PipelineProgress pipeline={application.pipeline} />
       </div>
 
-      {/* Rejected alert with block tasks */}
-      {hasRejectedItems && blockTasks.length > 0 && (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          title="维护审核不通过，存在未解决的Block任务"
-          description={
-            <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-              {blockTasks.map((bt) => (
-                <li key={bt.id}>
-                  <strong>{bt.description}</strong> - 责任人: {bt.responsiblePerson}，
-                  截止时间: {bt.deadline}
-                </li>
-              ))}
-            </ul>
-          }
+      {/* 维护审核驳回提示：默认收起，展开后显示评审意见（一条）+ Block 任务列表（多条） */}
+      {hasRejectedItems && (
+        <Collapse
+          className="rejection-collapse"
+          style={{
+            marginBottom: 16,
+            background: 'linear-gradient(180deg, #fff5f5 0%, #fff8f7 100%)',
+            border: '1px solid #ffccc7',
+            borderRadius: 8,
+            boxShadow: '0 2px 6px rgba(255, 77, 79, 0.08)',
+          }}
+          expandIconPosition="end"
+          items={[{
+            key: 'rejection',
+            label: (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+                <div
+                  style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: '#ff4d4f', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <ExclamationCircleOutlined style={{ color: '#fff', fontSize: 18 }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a' }}>
+                    「{effectiveRole}」角色维护审核不通过
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
+                    请按评审意见修改资料后重新提交审核
+                  </div>
+                </div>
+                <Space size={6} style={{ flexShrink: 0 }}>
+                  <Tag color="error" style={{ margin: 0 }}>
+                    Block 未关闭 {blockTasks.length}
+                  </Tag>
+                  <Tag color="default" style={{ margin: 0 }}>评审意见 1</Tag>
+                </Space>
+              </div>
+            ),
+            children: (
+              <div style={{ paddingTop: 4 }}>
+                <div style={{ marginBottom: 6, fontWeight: 500, fontSize: 13, color: '#595959' }}>
+                  评审意见
+                </div>
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: '10px 14px',
+                    background: '#fff',
+                    border: '1px solid #ffe7e6',
+                    borderLeft: '3px solid #ff4d4f',
+                    borderRadius: 4,
+                    color: '#333',
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
+                  {roleReviewComment || '（未填写）'}
+                </div>
+                <div style={{ marginBottom: 6, fontWeight: 500, fontSize: 13, color: '#595959' }}>
+                  Block 任务列表
+                  <Tag color="error" style={{ marginLeft: 8 }}>未关闭 {blockTasks.length}</Tag>
+                </div>
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="id"
+                  dataSource={blockTasks}
+                  style={{ background: '#fff', borderRadius: 4, overflow: 'hidden' }}
+                  columns={[
+                    { title: '序号', key: 'index', width: 60, align: 'center', render: (_, __, idx) => idx + 1 },
+                    { title: '问题描述', dataIndex: 'description', key: 'description' },
+                    { title: '解决方案', dataIndex: 'resolution', key: 'resolution' },
+                    { title: '责任人', dataIndex: 'responsiblePerson', key: 'responsiblePerson', width: 90, align: 'center' },
+                    { title: '部门', dataIndex: 'department', key: 'department', width: 110, align: 'center' },
+                    { title: '截止日期', dataIndex: 'deadline', key: 'deadline', width: 110, align: 'center' },
+                  ]}
+                  locale={{ emptyText: '暂无 Block 任务' }}
+                />
+              </div>
+            ),
+          }]}
         />
       )}
 

@@ -12,6 +12,8 @@ import {
   Button,
   Modal,
   Empty,
+  Popconfirm,
+  message,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -30,11 +32,6 @@ import {
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
-import {
-  MOCK_BLOCK_TASKS,
-  MOCK_LEGACY_TASKS,
-  MOCK_HISTORY,
-} from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
 import { useCurrentUser } from '@/context/UserContext';
 import type {
@@ -300,7 +297,7 @@ export default function ApplicationDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview } = useApplications();
+  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, blockTasks: ctxBlockTasks, legacyTasks: ctxLegacyTasks, history: ctxHistory, updateLegacyTasks } = useApplications();
   const { currentUser } = useCurrentUser();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -310,9 +307,12 @@ export default function ApplicationDetailPage({
 
   const checklistItems = ctxChecklist.filter((item) => item.applicationId === id);
   const reviewElements = ctxReview.filter((item) => item.applicationId === id);
-  const blockTasks = MOCK_BLOCK_TASKS.filter((task) => task.applicationId === id);
-  const legacyTasks = MOCK_LEGACY_TASKS.filter((task) => task.applicationId === id);
-  const historyRecords = MOCK_HISTORY.filter((record) => record.applicationId === id);
+  const blockTasks = ctxBlockTasks.filter((task) => task.applicationId === id);
+  const legacyTasks = ctxLegacyTasks.filter((task) => task.applicationId === id);
+  const historyRecords = ctxHistory
+    .filter((record) => record.applicationId === id)
+    .slice()
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
   const showResultModal = (title: string, content: string) => {
     setModalTitle(title);
@@ -613,6 +613,37 @@ export default function ApplicationDetailPage({
       align: 'center',
       render: (val: string) => val.slice(0, 10),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 130,
+      align: 'center',
+      fixed: 'right',
+      render: (_: unknown, record: LegacyTask) => {
+        const isResponsible = record.responsiblePerson === currentUser.name;
+        if (record.status !== 'open' || !isResponsible) {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
+        return (
+          <Popconfirm
+            title="标记任务为已解决"
+            description="确认该遗留任务已解决？操作后状态将更新为「已解决」。"
+            okText="确认已解决"
+            cancelText="取消"
+            onConfirm={() => {
+              updateLegacyTasks((prev) =>
+                prev.map((t) => (t.id === record.id ? { ...t, status: 'resolved' as const } : t)),
+              );
+              message.success('已标记为已解决');
+            }}
+          >
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }}>
+              标记已解决
+            </Button>
+          </Popconfirm>
+        );
+      },
+    },
   ];
 
   // --- 历史记录图标 ---
@@ -789,7 +820,7 @@ export default function ApplicationDetailPage({
               rowKey="id"
               pagination={false}
               size="small"
-              scroll={{ x: 900 }}
+              scroll={{ x: 1030 }}
               locale={{ emptyText: '暂无遗留任务' }}
             />
           </Card>

@@ -77,12 +77,23 @@ export default function PipelineProgress({ pipeline, showRoleDots = true }: Pipe
               {showDots && (
                 <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                   {pipeline.roleProgress.map((rp) => {
-                    const roleStatus = index === 1 ? rp.entryStatus : rp.reviewStatus;
+                    // 当某角色维护审核被驳回时：资料录入节点回滚为「不通过」(rejected)，
+                    // 维护审核节点回滚为「待审核」(not_started)，等待资料修改后重新提交。
+                    const isRoleBouncedBack = rp.reviewStatus === 'rejected';
+                    let roleStatus: RoleNodeStatus;
+                    let labelText: string;
+                    if (index === 1) {
+                      roleStatus = isRoleBouncedBack ? 'rejected' : rp.entryStatus;
+                      labelText = isRoleBouncedBack ? '审核不通过，需修改' : ROLE_STATUS_LABELS[roleStatus];
+                    } else {
+                      roleStatus = isRoleBouncedBack ? 'not_started' : rp.reviewStatus;
+                      labelText = isRoleBouncedBack ? '待审核（资料修改后再次审核）' : ROLE_STATUS_LABELS[roleStatus];
+                    }
                     const dotColor = ROLE_STATUS_COLORS[roleStatus];
                     return (
                       <Tooltip
                         key={rp.role}
-                        title={`${ROLE_LABELS[rp.role]}: ${ROLE_STATUS_LABELS[roleStatus]}`}
+                        title={`${ROLE_LABELS[rp.role]}: ${labelText}`}
                       >
                         <div
                           style={{
