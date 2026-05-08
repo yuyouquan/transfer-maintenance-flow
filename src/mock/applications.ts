@@ -573,12 +573,16 @@ const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
 // 系统: 已通过
 // ============================================================
 
+// SPM 角色级驳回意见：本次驳回作为一次评审事件，整角色共用同一条评审意见
+const APP002_SPM_REVIEW_COMMENT
+  = 'SPM 提交资料存在多处问题：项目计划归档截图不清晰，OTA 版本链路缺少 V2.1→V2.3 升级路径，文档归档服务器链接已失效，详见 Block 任务列表。';
+
 function makeApp002ClOverrides(): Record<number, ItemOverride> {
   const ov: Record<number, ItemOverride> = {};
-  // SPM (0-24): 大部分reviewing, 第2、7条被拒绝
-  for (let i = 0; i <= 24; i++) ov[i] = ENTERED_PASSED_REVIEWING;
-  ov[2] = { ...ENTERED_PASSED_REJECTED, reviewComment: '项目计划归档截图不清晰，请重新上传高清截图' };
-  ov[7] = { ...ENTERED_PASSED_REJECTED, reviewComment: 'OTA版本链路存在断链，缺少V2.1到V2.3的升级路径' };
+  // SPM (0-24): 第2、7条被拒绝；其余角色项一并回退到「待审核」等待研发侧修改后重新提交
+  for (let i = 0; i <= 24; i++) ov[i] = ENTERED_PASSED;
+  ov[2] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
+  ov[7] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
   // 测试 (25-35): all entered+passed, reviewStatus=passed
   for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 底软 (36-46): all entered+passed, reviewStatus=reviewing
@@ -592,9 +596,9 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
 
 function makeApp002ReOverrides(): Record<number, ItemOverride> {
   const ov: Record<number, ItemOverride> = {};
-  // SPM (0-4): 大部分reviewing, 第1条被拒绝
-  for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED_REVIEWING;
-  ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: '文档归档服务器链接已失效，需要重新归档到新的NAS路径' };
+  // SPM (0-4): 第1条被拒绝；其余角色项回退到「待审核」
+  for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED;
+  ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
   // 底软 (5-9): reviewing
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   // 系统 (10-14): passed
@@ -741,25 +745,39 @@ export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = [
 
 export const MOCK_BLOCK_TASKS: BlockTask[] = [
   {
-    id: 'bt-001', applicationId: 'app-001',
+    id: 'bt-001', applicationId: 'app-001', responsibleRole: '底软',
     description: '核心服务模块响应时间过长，影响用户操作',
     resolution: '对数据库查询进行索引优化，并引入缓存机制',
     responsiblePerson: '赵六', department: '底软开发部',
     deadline: '2026-03-20', status: 'open', createdAt: '2026-03-12T10:00:00Z',
   },
   {
-    id: 'bt-002', applicationId: 'app-001',
+    id: 'bt-002', applicationId: 'app-001', responsibleRole: '系统',
     description: '系统编译配置文档链接无法访问',
     resolution: '重新整理编译配置文档并上传到飞书云盘',
     responsiblePerson: '钱七', department: '系统集成部',
     deadline: '2026-03-18', status: 'open', createdAt: '2026-03-12T11:00:00Z',
   },
   {
-    id: 'bt-003', applicationId: 'app-005',
+    id: 'bt-003', applicationId: 'app-005', responsibleRole: '系统',
     description: '系统已知问题清单文档链接失效',
     resolution: '重新整理系统已知问题清单并更新有效链接',
     responsiblePerson: '钱七', department: '系统集成部',
     deadline: '2026-03-25', status: 'open', createdAt: '2026-03-14T15:00:00Z',
+  },
+  {
+    id: 'bt-004', applicationId: 'app-002', responsibleRole: 'SPM',
+    description: '项目计划归档截图不清晰，无法识别版本节点',
+    resolution: '使用高分辨率截图重新归档，并补充每个版本节点的说明',
+    responsiblePerson: '冯十二', department: '项目管理部',
+    deadline: '2026-03-22', status: 'open', createdAt: '2026-03-12T15:30:00Z',
+  },
+  {
+    id: 'bt-005', applicationId: 'app-002', responsibleRole: 'SPM',
+    description: 'OTA 版本链路从 V2.1 到 V2.3 缺少升级路径',
+    resolution: '补齐 V2.2 中间版本的升级链路并验证回滚方案',
+    responsiblePerson: '冯十二', department: '项目管理部',
+    deadline: '2026-03-25', status: 'open', createdAt: '2026-03-12T15:35:00Z',
   },
 ];
 
@@ -780,40 +798,63 @@ export const MOCK_LEGACY_TASKS: LegacyTask[] = [
 // Mock历史记录
 // ============================================================
 
+// 历史记录只保留大节点级事件：
+// - 创建转维申请
+// - {角色} 资料录入与AI检查完毕（提交审核时）
+// - {角色} 维护审核通过 / {角色} 维护审核被拒绝
+// - SQA审核通过 / SQA关闭流水线
+// - 申请已取消（项目级关闭）
 export const MOCK_HISTORY: HistoryRecord[] = [
-  { id: 'h001', applicationId: 'app-001', action: '创建转维申请', operator: '张三', detail: '创建了X6870_H1234(Android16)的转维申请', timestamp: '2026-03-10T10:00:00Z' },
-  { id: 'h002', applicationId: 'app-001', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-03-10T10:00:05Z' },
-  { id: 'h003', applicationId: 'app-001', action: '资料录入', operator: '张三', detail: 'SPM角色：录入了"IPM/SPUG项目信息完整无误"的资料', timestamp: '2026-03-11T09:30:00Z' },
-  { id: 'h004', applicationId: 'app-001', action: 'AI检查通过', operator: '系统', detail: 'SPM角色：IPM/SPUG项目信息检查通过', timestamp: '2026-03-11T09:31:00Z' },
-  { id: 'h005', applicationId: 'app-001', action: '资料录入', operator: '李四', detail: '测试角色：录入了"确认OTA首版到最新量升版本中间无断开"的资料', timestamp: '2026-03-11T14:00:00Z' },
-  { id: 'h006', applicationId: 'app-001', action: 'AI检查不通过', operator: '系统', detail: '系统角色：AI检查不通过，系统编译配置文档链接无法访问，已创建Block任务', timestamp: '2026-03-12T11:00:00Z' },
-  // app-005 历史记录
-  { id: 'h007', applicationId: 'app-005', action: '创建转维申请', operator: '张三', detail: '创建了X7100_H4567(Android17)的转维申请', timestamp: '2026-03-01T09:00:00Z' },
-  { id: 'h008', applicationId: 'app-005', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-03-01T09:00:05Z' },
-  { id: 'h009', applicationId: 'app-005', action: '资料录入', operator: '张三', detail: 'SPM角色：完成全部25条CheckList资料录入', timestamp: '2026-03-14T10:00:00Z' },
-  { id: 'h010', applicationId: 'app-005', action: 'AI检查通过', operator: '系统', detail: 'SPM角色：全部CheckList项AI检查通过', timestamp: '2026-03-14T10:30:00Z' },
-  { id: 'h011', applicationId: 'app-005', action: '资料录入', operator: '张三', detail: 'SPM角色：完成全部5条评审要素录入', timestamp: '2026-03-14T14:00:00Z' },
-  { id: 'h012', applicationId: 'app-005', action: 'AI检查通过', operator: '系统', detail: 'SPM角色：全部评审要素AI检查通过，SPM可提交审核', timestamp: '2026-03-14T14:30:00Z' },
-  { id: 'h013', applicationId: 'app-005', action: '资料录入', operator: '李四', detail: '测试角色：录入了6条CheckList资料', timestamp: '2026-03-13T11:00:00Z' },
-  { id: 'h014', applicationId: 'app-005', action: 'AI检查不通过', operator: '系统', detail: '系统角色：系统已知问题清单文档链接失效，已创建Block任务', timestamp: '2026-03-14T15:00:00Z' },
-  // app-006 历史记录
-  { id: 'h015', applicationId: 'app-006', action: '创建转维申请', operator: '张三', detail: '创建了X7200_H7890(Android16)的转维申请', timestamp: '2026-02-25T10:00:00Z' },
-  { id: 'h016', applicationId: 'app-006', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-02-25T10:00:05Z' },
-  { id: 'h017', applicationId: 'app-006', action: '资料录入', operator: '赵六', detail: '底软角色：完成全部CheckList和评审要素录入', timestamp: '2026-03-12T16:00:00Z' },
-  { id: 'h018', applicationId: 'app-006', action: 'AI检查通过', operator: '系统', detail: '底软角色：全部AI检查通过，底软可提交审核', timestamp: '2026-03-12T16:30:00Z' },
-  { id: 'h019', applicationId: 'app-006', action: '资料录入', operator: '钱七', detail: '系统角色：完成全部CheckList和评审要素录入', timestamp: '2026-03-13T11:00:00Z' },
-  { id: 'h020', applicationId: 'app-006', action: 'AI检查通过', operator: '系统', detail: '系统角色：全部AI检查通过，系统可提交审核', timestamp: '2026-03-13T11:30:00Z' },
-  // app-007 历史记录
-  { id: 'h021', applicationId: 'app-007', action: '创建转维申请', operator: '冯十二', detail: '创建了X7300_H2345(Android15)的转维申请', timestamp: '2026-03-05T08:00:00Z' },
-  { id: 'h022', applicationId: 'app-007', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-03-05T08:00:05Z' },
-  { id: 'h023', applicationId: 'app-007', action: '资料录入', operator: '冯十二', detail: 'SPM角色：完成全部录入和AI检查，可提交审核', timestamp: '2026-03-15T09:00:00Z' },
-  { id: 'h024', applicationId: 'app-007', action: '资料录入', operator: '褚十四', detail: '底软角色：完成全部录入和AI检查，可提交审核', timestamp: '2026-03-15T14:00:00Z' },
-  // app-008 历史记录
-  { id: 'h025', applicationId: 'app-008', action: '创建转维申请', operator: '张三', detail: '创建了X7400_H6789(Android16)的转维申请', timestamp: '2026-02-10T09:00:00Z' },
-  { id: 'h026', applicationId: 'app-008', action: '项目发起完成', operator: '系统', detail: '自动完成项目发起节点，进入资料录入阶段', timestamp: '2026-02-10T09:00:05Z' },
-  { id: 'h027', applicationId: 'app-008', action: '资料录入完成', operator: '系统', detail: '所有角色资料录入和AI检查全部完成', timestamp: '2026-03-10T10:00:00Z' },
-  { id: 'h028', applicationId: 'app-008', action: '维护审核完成', operator: '系统', detail: '所有角色维护审核全部通过', timestamp: '2026-03-18T09:00:00Z' },
-  { id: 'h029', applicationId: 'app-008', action: '进入SQA审核', operator: '系统', detail: '维护审核全部通过，自动进入SQA审核阶段', timestamp: '2026-03-18T10:00:00Z' },
+  // app-001: dataEntry 进行中，尚未有角色完成提交
+  { id: 'h001', applicationId: 'app-001', action: '创建转维申请', operator: '张三', detail: '创建了 X6870_H1234(Android16) 的转维申请', timestamp: '2026-03-10T10:00:00Z' },
+
+  // app-002: 资料录入全部完成；测试/系统/影像 维护审核通过；SPM 维护审核被拒绝；底软审核中（无终态事件）
+  { id: 'h101', applicationId: 'app-002', action: '创建转维申请', operator: '冯十二', detail: '创建了 X6768_H5678(Android15) 的转维申请', timestamp: '2026-02-20T09:00:00Z' },
+  { id: 'h102', applicationId: 'app-002', action: 'SPM 资料录入与AI检查完毕', operator: '冯十二', detail: 'SPM 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-08T10:00:00Z' },
+  { id: 'h103', applicationId: 'app-002', action: '测试 资料录入与AI检查完毕', operator: '陈十三', detail: '测试 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-08T15:00:00Z' },
+  { id: 'h104', applicationId: 'app-002', action: '底软 资料录入与AI检查完毕', operator: '褚十四', detail: '底软 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-09T09:30:00Z' },
+  { id: 'h105', applicationId: 'app-002', action: '系统 资料录入与AI检查完毕', operator: '卫十五', detail: '系统 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-09T11:00:00Z' },
+  { id: 'h106', applicationId: 'app-002', action: '影像 资料录入与AI检查完毕', operator: '蒋十六', detail: '影像 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-09T14:00:00Z' },
+  { id: 'h107', applicationId: 'app-002', action: '测试 维护审核通过', operator: '李四', detail: '测试 角色维护审核全部通过', timestamp: '2026-03-10T10:00:00Z' },
+  { id: 'h108', applicationId: 'app-002', action: '系统 维护审核通过', operator: '钱七', detail: '系统 角色维护审核全部通过', timestamp: '2026-03-10T14:00:00Z' },
+  { id: 'h109', applicationId: 'app-002', action: '影像 维护审核通过', operator: '沈十七', detail: '影像 角色维护审核全部通过', timestamp: '2026-03-11T09:00:00Z' },
+  { id: 'h110', applicationId: 'app-002', action: 'SPM 维护审核被拒绝', operator: '张三', detail: 'SPM 角色维护审核被拒绝；驳回原因：项目计划归档截图不清晰、OTA 版本链路存在断链、文档归档服务器链接已失效', timestamp: '2026-03-12T16:00:00Z' },
+
+  // app-003: 已取消
+  { id: 'h201', applicationId: 'app-003', action: '创建转维申请', operator: '张三', detail: '创建了 X6980_H9012(Android17) 的转维申请', timestamp: '2026-03-05T14:00:00Z' },
+  { id: 'h202', applicationId: 'app-003', action: '申请已取消', operator: '张三', detail: '取消原因：项目计划变更，暂缓转维', timestamp: '2026-03-08T10:00:00Z' },
+
+  // app-004: 全流程完成（含 SQA 通过）
+  { id: 'h301', applicationId: 'app-004', action: '创建转维申请', operator: '冯十二', detail: '创建了 X6650_H3456(Android14) 的转维申请', timestamp: '2026-01-15T09:00:00Z' },
+  { id: 'h302', applicationId: 'app-004', action: 'SPM 资料录入与AI检查完毕', operator: '冯十二', detail: 'SPM 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-08T10:00:00Z' },
+  { id: 'h303', applicationId: 'app-004', action: '测试 资料录入与AI检查完毕', operator: '陈十三', detail: '测试 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-09T11:00:00Z' },
+  { id: 'h304', applicationId: 'app-004', action: '底软 资料录入与AI检查完毕', operator: '褚十四', detail: '底软 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-10T15:00:00Z' },
+  { id: 'h305', applicationId: 'app-004', action: '系统 资料录入与AI检查完毕', operator: '卫十五', detail: '系统 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-11T10:00:00Z' },
+  { id: 'h306', applicationId: 'app-004', action: '影像 资料录入与AI检查完毕', operator: '蒋十六', detail: '影像 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-12T14:00:00Z' },
+  { id: 'h307', applicationId: 'app-004', action: 'SPM 维护审核通过', operator: '张三', detail: 'SPM 角色维护审核全部通过', timestamp: '2026-02-18T10:00:00Z' },
+  { id: 'h308', applicationId: 'app-004', action: '测试 维护审核通过', operator: '李四', detail: '测试 角色维护审核全部通过', timestamp: '2026-02-19T11:00:00Z' },
+  { id: 'h309', applicationId: 'app-004', action: '底软 维护审核通过', operator: '赵六', detail: '底软 角色维护审核全部通过', timestamp: '2026-02-20T09:00:00Z' },
+  { id: 'h310', applicationId: 'app-004', action: '系统 维护审核通过', operator: '钱七', detail: '系统 角色维护审核全部通过', timestamp: '2026-02-22T15:00:00Z' },
+  { id: 'h311', applicationId: 'app-004', action: '影像 维护审核通过', operator: '沈十七', detail: '影像 角色维护审核全部通过', timestamp: '2026-02-24T11:00:00Z' },
+  { id: 'h312', applicationId: 'app-004', action: 'SQA 审核通过', operator: '王五', detail: 'SQA 审核全部通过，转维流程完成', timestamp: '2026-02-28T10:00:00Z' },
+
+  // app-005/006/007: 进入资料录入阶段，尚无角色完成提交（SPM/底软/系统等虽已 entered+passed，但 reviewStatus 仍为 not_started，未点击提交审核）
+  { id: 'h401', applicationId: 'app-005', action: '创建转维申请', operator: '张三', detail: '创建了 X7100_H4567(Android17) 的转维申请', timestamp: '2026-03-01T09:00:00Z' },
+  { id: 'h501', applicationId: 'app-006', action: '创建转维申请', operator: '张三', detail: '创建了 X7200_H7890(Android16) 的转维申请', timestamp: '2026-02-25T10:00:00Z' },
+  { id: 'h601', applicationId: 'app-007', action: '创建转维申请', operator: '冯十二', detail: '创建了 X7300_H2345(Android15) 的转维申请', timestamp: '2026-03-05T08:00:00Z' },
+
+  // app-008: 5 角色资料录入完毕 + 5 角色维护审核通过；SQA 审核进行中（未出 SQA 终态事件）
+  { id: 'h701', applicationId: 'app-008', action: '创建转维申请', operator: '张三', detail: '创建了 X7400_H6789(Android16) 的转维申请', timestamp: '2026-02-10T09:00:00Z' },
+  { id: 'h702', applicationId: 'app-008', action: 'SPM 资料录入与AI检查完毕', operator: '张三', detail: 'SPM 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-01T10:00:00Z' },
+  { id: 'h703', applicationId: 'app-008', action: '测试 资料录入与AI检查完毕', operator: '李四', detail: '测试 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-02T11:00:00Z' },
+  { id: 'h704', applicationId: 'app-008', action: '底软 资料录入与AI检查完毕', operator: '赵六', detail: '底软 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-03T15:00:00Z' },
+  { id: 'h705', applicationId: 'app-008', action: '系统 资料录入与AI检查完毕', operator: '钱七', detail: '系统 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-04T10:00:00Z' },
+  { id: 'h706', applicationId: 'app-008', action: '影像 资料录入与AI检查完毕', operator: '蒋十六', detail: '影像 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-05T14:00:00Z' },
+  { id: 'h707', applicationId: 'app-008', action: 'SPM 维护审核通过', operator: '孙八', detail: 'SPM 角色维护审核全部通过', timestamp: '2026-03-15T10:00:00Z' },
+  { id: 'h708', applicationId: 'app-008', action: '测试 维护审核通过', operator: '周九', detail: '测试 角色维护审核全部通过', timestamp: '2026-03-15T14:00:00Z' },
+  { id: 'h709', applicationId: 'app-008', action: '底软 维护审核通过', operator: '吴十', detail: '底软 角色维护审核全部通过', timestamp: '2026-03-16T11:00:00Z' },
+  { id: 'h710', applicationId: 'app-008', action: '系统 维护审核通过', operator: '郑十一', detail: '系统 角色维护审核全部通过', timestamp: '2026-03-17T10:00:00Z' },
+  { id: 'h711', applicationId: 'app-008', action: '影像 维护审核通过', operator: '沈十七', detail: '影像 角色维护审核全部通过', timestamp: '2026-03-18T09:00:00Z' },
 ];
 
 // ============================================================

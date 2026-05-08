@@ -460,7 +460,11 @@ export default function WorkbenchPage() {
         const isDelegatedEntry = [
           ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
           ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
-        ].some((i) => i.entryPersonId === currentUser.id || i.delegatedTo?.includes(currentUser.id));
+        ].some(
+          (i) =>
+            (i.entryPersonId === currentUser.id || i.delegatedTo?.includes(currentUser.id))
+            && (i.reviewStatus === 'not_reviewed' || i.reviewStatus === 'rejected'),
+        );
         const showEntry = isInProgress && canEntry && (hasEntryRole || isDelegatedEntry);
 
         const isInReview = record.pipeline.maintenanceReview === 'in_progress';

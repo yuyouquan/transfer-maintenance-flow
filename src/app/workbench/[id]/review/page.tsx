@@ -7,7 +7,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
-  CheckCircleOutlined, CloseCircleOutlined, UserSwitchOutlined,
+  CheckCircleOutlined, CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
@@ -77,7 +77,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const { currentUser } = useCurrentUser();
   const {
     applications, checklistItems: ctxChecklist, reviewElements: ctxReview,
-    updateChecklistItems, updateReviewElements,
+    updateChecklistItems, updateReviewElements, addHistoryRecord,
   } = useApplications();
 
   const application = useMemo(
@@ -152,11 +152,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const [failModalOpen, setFailModalOpen] = useState(false);
   const [wantLegacy, setWantLegacy] = useState(false);
 
-  // Delegate modal & delegated reviewer display
-  const [delegateModalOpen, setDelegateModalOpen] = useState(false);
-  const [delegatePersonId, setDelegatePersonId] = useState<string | undefined>(undefined);
-  const [delegatedReviewerName, setDelegatedReviewerName] = useState<string | null>(null);
-
   // Fail form
   const [reviewComment, setReviewComment] = useState('');
   const [blockTasks, setBlockTasks] = useState<BlockTaskForm[]>([
@@ -173,8 +168,32 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const currentRole = userResponsibleRole ?? 'SPM';
   const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
 
+  // 拒绝时把同 application + 同角色的其它「审核中/通过」项重置为「待审核」，
+  // 让整角色随研发侧修改资料后统一重新审核。
+  const buildRoleResetUpdater = useCallback(
+    (rejectedIds: ReadonlySet<string>, role: string, appId: string) =>
+      <T extends CheckListItem | ReviewElement>(items: T[]): T[] =>
+        items.map((item) => {
+          if (rejectedIds.has(item.id)) return item;
+          if (
+            item.applicationId === appId
+            && item.responsibleRole === role
+            && (item.reviewStatus === 'reviewing' || item.reviewStatus === 'passed')
+          ) {
+            return { ...item, reviewStatus: 'not_reviewed' as const };
+          }
+          return item;
+        }),
+    [],
+  );
+
   // --- Single item review ---
   const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
+    const target = type === 'checklist'
+      ? allChecklistItems.find((i) => i.id === itemId)
+      : allReviewElements.find((i) => i.id === itemId);
+    const isReject = newStatus === 'rejected';
+
     if (type === 'checklist') {
       setAllChecklistItems((prev) =>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
@@ -184,38 +203,68 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
       );
     }
+
+    if (isReject && target) {
+      const ids = new Set([itemId]);
+      const reset = buildRoleResetUpdater(ids, target.responsibleRole, target.applicationId);
+      setAllChecklistItems(reset);
+      setAllReviewElements(reset);
+    }
+
     message.success(newStatus === 'passed' ? '已通过' : '已标记为不通过');
-  }, [setAllChecklistItems, setAllReviewElements]);
+  }, [allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
 
   // --- Batch review ---
   const handleBatchReview = useCallback((newStatus: ReviewStatus) => {
+    const isReject = newStatus === 'rejected';
+    const selectedSet = new Set(selectedRowKeys.map(String));
+
     if (activeTab === 'checklist') {
       setAllChecklistItems((prev) =>
         prev.map((item) =>
-          selectedRowKeys.includes(item.id) ? { ...item, reviewStatus: newStatus } : item
+          selectedSet.has(item.id) ? { ...item, reviewStatus: newStatus } : item
         )
       );
     } else {
       setAllReviewElements((prev) =>
         prev.map((item) =>
-          selectedRowKeys.includes(item.id) ? { ...item, reviewStatus: newStatus } : item
+          selectedSet.has(item.id) ? { ...item, reviewStatus: newStatus } : item
         )
       );
     }
+
+    if (isReject) {
+      const sourceItems = activeTab === 'checklist' ? allChecklistItems : allReviewElements;
+      const rejectedTargets = sourceItems.filter((i) => selectedSet.has(i.id));
+      const roleAppPairs = new Set(rejectedTargets.map((i) => `${i.applicationId}::${i.responsibleRole}`));
+      roleAppPairs.forEach((key) => {
+        const [appId, role] = key.split('::');
+        const reset = buildRoleResetUpdater(selectedSet, role, appId);
+        setAllChecklistItems(reset);
+        setAllReviewElements(reset);
+      });
+    }
+
     setSelectedRowKeys([]);
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
-  }, [activeTab, selectedRowKeys, setAllChecklistItems, setAllReviewElements]);
+  }, [activeTab, selectedRowKeys, allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
 
   // Helper: update all items of current role to a given reviewStatus
-  const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus) => {
+  const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus, comment?: string) => {
     const isMyRoleItem = (item: CheckListItem | ReviewElement) =>
       item.responsibleRole === userResponsibleRole;
 
-    // 驳回时重置 aiCheckStatus，强制研发侧重新修改并触发AI检查后才能再提交
+    // 驳回时重置 aiCheckStatus，强制研发侧重新修改并触发AI检查后才能再提交；
+    // 同一次角色级驳回事件共享一条评审意见（comment）。
     const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
       if (!isMyRoleItem(item)) return item;
       if (newStatus === 'rejected') {
-        return { ...item, reviewStatus: newStatus, aiCheckStatus: 'not_started' as const };
+        return {
+          ...item,
+          reviewStatus: newStatus,
+          aiCheckStatus: 'not_started' as const,
+          reviewComment: comment,
+        };
       }
       return { ...item, reviewStatus: newStatus };
     };
@@ -236,12 +285,18 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       }
     }
     applyRoleReviewStatus('passed');
+    addHistoryRecord({
+      applicationId: id,
+      action: `${currentRole} 维护审核通过`,
+      operator: currentUser.name,
+      detail: `${currentRole} 角色维护审核全部通过${wantLegacy && legacyTasks.length > 0 ? `，并登记 ${legacyTasks.length} 项遗留任务` : ''}`,
+    });
     message.success('审核通过，已提交');
     setPassModalOpen(false);
     setWantLegacy(false);
     setLegacyTasks([{ responsiblePerson: '', department: '', description: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  }, [wantLegacy, legacyTasks, applyRoleReviewStatus, router, id]);
+  }, [wantLegacy, legacyTasks, applyRoleReviewStatus, router, id, addHistoryRecord, currentRole, currentUser.name]);
 
   // --- Fail confirm ---
   const handleFailConfirm = useCallback(() => {
@@ -256,13 +311,19 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       message.warning('请填写完整所有Block任务信息');
       return;
     }
-    applyRoleReviewStatus('rejected');
+    applyRoleReviewStatus('rejected', reviewComment.trim());
+    addHistoryRecord({
+      applicationId: id,
+      action: `${currentRole} 维护审核被拒绝`,
+      operator: currentUser.name,
+      detail: `${currentRole} 角色维护审核被拒绝；驳回原因：${reviewComment.trim()}（已创建 ${blockTasks.length} 项 Block 任务）`,
+    });
     message.success('已拒绝并创建Block任务，已回退到资料录入阶段');
     setFailModalOpen(false);
     setReviewComment('');
     setBlockTasks([{ description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  }, [reviewComment, blockTasks, applyRoleReviewStatus, router, id]);
+  }, [reviewComment, blockTasks, applyRoleReviewStatus, router, id, addHistoryRecord, currentRole, currentUser.name]);
 
   // --- Block task CRUD ---
   const addBlockTask = useCallback(() => {
@@ -295,43 +356,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
     );
   }, []);
-
-  // --- Delegate: assign all review items of current role to another person ---
-  const openDelegateModal = useCallback(() => {
-    setDelegatePersonId(undefined);
-    setDelegateModalOpen(true);
-  }, []);
-
-  const handleDelegateConfirm = useCallback(() => {
-    if (!delegatePersonId) {
-      message.warning('请选择委派人员');
-      return;
-    }
-    const targetUser = MOCK_USERS.find((u) => u.id === delegatePersonId);
-    if (!targetUser) return;
-
-    const isMyItem = (item: CheckListItem | ReviewElement) =>
-      item.responsibleRole === userResponsibleRole
-      || item.reviewPersonId === currentUser.id;
-
-    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
-      if (!isMyItem(item)) return item;
-      return {
-        ...item,
-        reviewPerson: targetUser.name,
-        reviewPersonId: targetUser.id,
-        delegatedTo: [...new Set([...(item.delegatedTo ?? []), targetUser.id])],
-      };
-    };
-
-    setAllChecklistItems((prev) => prev.map(updateItem));
-    setAllReviewElements((prev) => prev.map(updateItem));
-    setDelegatedReviewerName(targetUser.name);
-
-    setDelegateModalOpen(false);
-    setDelegatePersonId(undefined);
-    message.success(`已将${currentRole}角色的审核任务委派给 ${targetUser.name}`);
-  }, [delegatePersonId, userResponsibleRole, currentUser.id, currentRole, setAllChecklistItems, setAllReviewElements]);
 
   // --- User options for selectors ---
   const userOptions = useMemo(
@@ -436,19 +460,24 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
-      render: (_: unknown, record: CheckListItem) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<CheckCircleOutlined />}
-            style={{ color: '#52c41a' }}
-            onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
-            通过
-          </Button>
-          <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-            onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
-            拒绝
-          </Button>
-        </Space>
-      ),
+      render: (_: unknown, record: CheckListItem) => {
+        if (record.reviewStatus === 'passed') {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" icon={<CheckCircleOutlined />}
+              style={{ color: '#52c41a' }}
+              onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
+              通过
+            </Button>
+            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+              onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
+              拒绝
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -520,19 +549,24 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     },
     {
       title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
-      render: (_: unknown, record: ReviewElement) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<CheckCircleOutlined />}
-            style={{ color: '#52c41a' }}
-            onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
-            通过
-          </Button>
-          <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-            onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
-            拒绝
-          </Button>
-        </Space>
-      ),
+      render: (_: unknown, record: ReviewElement) => {
+        if (record.reviewStatus === 'passed') {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
+        return (
+          <Space size={4}>
+            <Button type="link" size="small" icon={<CheckCircleOutlined />}
+              style={{ color: '#52c41a' }}
+              onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
+              通过
+            </Button>
+            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+              onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
+              拒绝
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -582,10 +616,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
             评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
           </span>
           <span style={{ color: '#666', fontSize: 13 }}>
-            负责人：{delegatedReviewerName ?? maintenanceMember?.name ?? '-'}
-            {delegatedReviewerName && (
-              <Tag color="purple" style={{ fontSize: 11, marginLeft: 6 }}>已委派</Tag>
-            )}
+            负责人：{maintenanceMember?.name ?? '-'}
           </span>
         </div>
         <Space size={8}>
@@ -601,10 +632,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
               <Divider type="vertical" />
             </>
           )}
-          <Button icon={<UserSwitchOutlined />} onClick={openDelegateModal}>
-            委派
-          </Button>
-          <Divider type="vertical" />
           <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
             不通过
           </Button>
@@ -790,41 +817,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         </Button>
       </Modal>
 
-      {/* Delegate Modal */}
-      <Modal
-        title="委派审核任务"
-        open={delegateModalOpen}
-        onCancel={() => {
-          setDelegateModalOpen(false);
-          setDelegatePersonId(undefined);
-        }}
-        onOk={handleDelegateConfirm}
-        okText="确认委派"
-        cancelText="取消"
-        width={500}
-        destroyOnHidden
-      >
-        <div style={{ marginBottom: 16, color: '#666' }}>
-          将 <Tag color="blue">{currentRole}</Tag> 角色的所有审核任务委派给其他人员，委派后该人员将成为新的审核责任人。
-        </div>
-        <Select
-          style={{ width: '100%' }}
-          placeholder="选择委派人员"
-          value={delegatePersonId}
-          onChange={setDelegatePersonId}
-          options={(() => {
-            const alreadyDelegated = new Set(
-              [...checklistItems, ...reviewElements]
-                .flatMap((i) => i.delegatedTo ?? [])
-            );
-            return MOCK_USERS
-              .filter((u) => u.id !== currentUser.id && !alreadyDelegated.has(u.id))
-              .map((u) => ({ value: u.id, label: `${u.name} (${u.role} - ${u.department})` }));
-          })()}
-          optionFilterProp="label"
-          showSearch
-        />
-      </Modal>
     </div>
   );
 }

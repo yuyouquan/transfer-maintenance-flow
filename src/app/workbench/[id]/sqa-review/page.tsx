@@ -36,6 +36,7 @@ import {
   MOCK_REVIEW_ELEMENTS,
 } from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
+import { useCurrentUser } from '@/context/UserContext';
 import type {
   TransferApplication,
   CheckListItem,
@@ -258,7 +259,8 @@ export default function SqaReviewPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, updateApplication } = useApplications();
+  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, updateApplication, addHistoryRecord } = useApplications();
+  const { currentUser } = useCurrentUser();
 
   const [sqaComment, setSqaComment] = useState('');
   const [approveModalVisible, setApproveModalVisible] = useState(false);
@@ -289,10 +291,16 @@ export default function SqaReviewPage({
       },
       updatedAt: new Date().toISOString(),
     }));
+    addHistoryRecord({
+      applicationId: id,
+      action: 'SQA 审核通过',
+      operator: currentUser.name,
+      detail: 'SQA 审核全部通过，转维流程完成',
+    });
     message.success('SQA审核通过，流水线进入信息变更阶段');
     setApproveModalVisible(false);
     router.push(`/workbench/${id}`);
-  }, [id, updateApplication, router]);
+  }, [id, updateApplication, router, addHistoryRecord, currentUser.name]);
 
   const handleReject = useCallback(() => {
     if (!sqaComment.trim()) {
@@ -310,10 +318,16 @@ export default function SqaReviewPage({
       },
       updatedAt: new Date().toISOString(),
     }));
+    addHistoryRecord({
+      applicationId: id,
+      action: 'SQA 关闭流水线',
+      operator: currentUser.name,
+      detail: `SQA 审核不通过，转维流程已终止；驳回原因：${sqaComment.trim()}`,
+    });
     message.success('SQA审核不通过，转维流程已终止');
     setRejectModalVisible(false);
     router.push(`/workbench/${id}`);
-  }, [id, sqaComment, updateApplication, router]);
+  }, [id, sqaComment, updateApplication, router, addHistoryRecord, currentUser.name]);
 
   if (!application) {
     return (
