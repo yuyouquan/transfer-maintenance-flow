@@ -7,7 +7,6 @@ import {
   Button,
   Input,
   Select,
-  Modal,
   Upload,
   Tooltip,
   Tag,
@@ -26,6 +25,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { MOCK_REVIEW_ELEMENT_TEMPLATES } from '@/mock';
 import type { ReviewElementTemplate } from '@/types';
+import { VersionCompareModal, type CompareRow } from '@/components/config/VersionCompareModal';
 
 // --- Mock version data ---
 
@@ -42,29 +42,76 @@ const MOCK_VERSIONS: ReadonlyArray<TemplateVersion> = [
   { version: 'v1.0', date: '2026-01-20', itemCount: 10, isCurrent: false },
 ];
 
-interface VersionDiffItem {
-  readonly description: string;
-  readonly status: '新增' | '修改' | '删除';
-}
+// --- Mock 版本对比数据 ---
 
-const MOCK_VERSION_DIFF: ReadonlyArray<VersionDiffItem> = [
-  { description: '确认安全启动链路完整', status: '新增' },
-  { description: '确认底软已知问题清单已完整交接', status: '新增' },
-  { description: '确认系统兼容性问题已记录', status: '新增' },
-  { description: '确认项目关键文档已归档到指定服务器', status: '修改' },
-  { description: '确认OTA版本链路完整，无断链', status: '修改' },
-  { description: '旧版驱动交接要求', status: '删除' },
+const MOCK_DIFF_v2_to_v3: ReadonlyArray<CompareRow> = [
+  // 新增
+  { key: 'add-1', changeType: '新增', fieldDiffs: [], standard: 'B07', description: '确认安全启动链路完整', responsibleRole: '底软', aiCheckRule: '检查安全启动验证报告存在' },
+  { key: 'add-2', changeType: '新增', fieldDiffs: [], standard: 'B08', description: '确认底软已知问题清单已完整交接', responsibleRole: '底软', aiCheckRule: '检查问题清单文档存在' },
+  { key: 'add-3', changeType: '新增', fieldDiffs: [], standard: 'C05', description: '确认系统兼容性问题已记录', responsibleRole: '系统', aiCheckRule: '检查兼容性矩阵文档' },
+  // 修改：归档要求更详细
+  {
+    key: 'mod-1',
+    changeType: '修改',
+    standard: 'A03',
+    description: '确认项目关键文档已归档到指定服务器并标注更新时间',
+    responsibleRole: 'SPM',
+    aiCheckRule: '检查归档目录可访问且最后修改时间在 30 日内',
+    modifier: '王五',
+    modifyTime: '2026-03-08 16:20',
+    fieldDiffs: [
+      {
+        field: 'description',
+        oldValue: '确认项目关键文档已归档到指定服务器',
+        newValue: '确认项目关键文档已归档到指定服务器并标注更新时间',
+      },
+      {
+        field: 'aiCheckRule',
+        oldValue: '检查归档目录可访问',
+        newValue: '检查归档目录可访问且最后修改时间在 30 日内',
+      },
+    ],
+  },
+  // 修改：OTA 责任角色调整
+  {
+    key: 'mod-2',
+    changeType: '修改',
+    standard: 'A05',
+    description: '确认OTA版本链路完整，无断链',
+    responsibleRole: '测试',
+    aiCheckRule: '检查 OTA 部署表完整且每个版本节点都有连接',
+    modifier: '李四',
+    modifyTime: '2026-03-09 10:05',
+    fieldDiffs: [
+      { field: 'responsibleRole', oldValue: 'SPM', newValue: '测试' },
+    ],
+  },
+  // 删除
+  { key: 'del-1', changeType: '删除', fieldDiffs: [], standard: 'B99', description: '旧版驱动交接要求', responsibleRole: '底软', aiCheckRule: '已废弃' },
+  // 未变更（少量举例）
+  { key: 'un-1', changeType: '未变更', fieldDiffs: [], standard: 'A01', description: 'IPM 系统版本计划与实际上市时间一致', responsibleRole: 'SPM', aiCheckRule: '检查 IPM 项目报告存在' },
+  { key: 'un-2', changeType: '未变更', fieldDiffs: [], standard: 'A02', description: '客户定制需求均已记录在 SPD 系统', responsibleRole: 'SPM', aiCheckRule: '检查 SPD 项目链接' },
+];
+
+const computeReviewElementDiff = (
+  baseVersion: string,
+  targetVersion: string,
+): ReadonlyArray<CompareRow> => {
+  void baseVersion;
+  void targetVersion;
+  return MOCK_DIFF_v2_to_v3;
+};
+
+const DIFF_FIELDS = [
+  { key: 'standard', title: '标准', width: 80 },
+  { key: 'description', title: '说明', width: 320 },
+  { key: 'responsibleRole', title: '责任角色', width: 80 },
+  { key: 'aiCheckRule', title: '智能检查规则', width: 320 },
 ];
 
 // --- Constants ---
 
 const AI_RULE_TRUNCATE_LENGTH = 20;
-
-const STATUS_COLOR_MAP: Record<string, string> = {
-  '新增': 'green',
-  '修改': 'blue',
-  '删除': 'red',
-};
 
 // --- Component ---
 
@@ -73,8 +120,6 @@ export default function ReviewElementsConfigPage() {
   const [searchText, setSearchText] = useState('');
   const [selectedVersion, setSelectedVersion] = useState('v3.0');
   const [diffModalOpen, setDiffModalOpen] = useState(false);
-  const [diffFromVersion, setDiffFromVersion] = useState('v2.0');
-  const [diffToVersion, setDiffToVersion] = useState('v3.0');
 
   const filteredData = useMemo(() => {
     if (!searchText.trim()) {
@@ -175,27 +220,6 @@ export default function ReviewElementsConfigPage() {
     []
   );
 
-  const diffColumns: ColumnsType<VersionDiffItem> = useMemo(
-    () => [
-      {
-        title: '评审要素',
-        dataIndex: 'description',
-        key: 'description',
-      },
-      {
-        title: '状态',
-        dataIndex: 'status',
-        key: 'status',
-        width: 100,
-        align: 'center',
-        render: (status: string) => (
-          <Tag color={STATUS_COLOR_MAP[status] ?? 'default'}>{status}</Tag>
-        ),
-      },
-    ],
-    []
-  );
-
   const versionOptions = useMemo(
     () =>
       MOCK_VERSIONS.map((v) => ({
@@ -276,40 +300,16 @@ export default function ReviewElementsConfigPage() {
         />
       </Card>
 
-      <Modal
-        title="版本对比"
+      <VersionCompareModal
         open={diffModalOpen}
-        onCancel={handleCloseDiffModal}
-        footer={null}
-        width={700}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Space>
-            <span>对比版本：</span>
-            <Select
-              value={diffFromVersion}
-              onChange={setDiffFromVersion}
-              options={versionOptions}
-              style={{ width: 200 }}
-            />
-            <span>→</span>
-            <Select
-              value={diffToVersion}
-              onChange={setDiffToVersion}
-              options={versionOptions}
-              style={{ width: 200 }}
-            />
-          </Space>
-        </div>
-
-        <Table<VersionDiffItem>
-          columns={diffColumns}
-          dataSource={MOCK_VERSION_DIFF}
-          rowKey="description"
-          size="small"
-          pagination={false}
-        />
-      </Modal>
+        onClose={handleCloseDiffModal}
+        title="评审要素配置 · 历史版本对比"
+        versions={versionOptions}
+        defaultBaseVersion="v2.0"
+        defaultTargetVersion="v3.0"
+        fields={DIFF_FIELDS}
+        computeDiff={computeReviewElementDiff}
+      />
     </div>
   );
 }
