@@ -549,22 +549,37 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
-      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
+      title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: CheckListItem) => {
+        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
+        const canReviewItem = isRoleOwner || isDelegatedToMe;
+        const canDelegate = isRoleOwner || isDelegatedToMe;
+
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
         return (
           <Space size={4}>
-            <Button type="link" size="small" icon={<CheckCircleOutlined />}
-              style={{ color: '#52c41a' }}
-              onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
-              通过
-            </Button>
-            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-              onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
-              拒绝
-            </Button>
+            {canReviewItem && (
+              <>
+                <Button type="link" size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a' }}
+                  onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
+                  通过
+                </Button>
+                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+                  onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
+                  拒绝
+                </Button>
+              </>
+            )}
+            {canDelegate && (
+              <Button type="link" size="small"
+                onClick={() => openDelegateModal([record.id], 'checklist')}>
+                委派
+              </Button>
+            )}
           </Space>
         );
       },
@@ -638,22 +653,37 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
-      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
+      title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: ReviewElement) => {
+        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
+        const canReviewItem = isRoleOwner || isDelegatedToMe;
+        const canDelegate = isRoleOwner || isDelegatedToMe;
+
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
         return (
           <Space size={4}>
-            <Button type="link" size="small" icon={<CheckCircleOutlined />}
-              style={{ color: '#52c41a' }}
-              onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
-              通过
-            </Button>
-            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-              onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
-              拒绝
-            </Button>
+            {canReviewItem && (
+              <>
+                <Button type="link" size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a' }}
+                  onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
+                  通过
+                </Button>
+                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+                  onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
+                  拒绝
+                </Button>
+              </>
+            )}
+            {canDelegate && (
+              <Button type="link" size="small"
+                onClick={() => openDelegateModal([record.id], 'review_element')}>
+                委派
+              </Button>
+            )}
           </Space>
         );
       },
@@ -719,6 +749,15 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
               <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
                 批量不通过 ({selectedRowKeys.length})
               </Button>
+              {userResponsibleRole && (
+                <Button size="small"
+                  onClick={() => openDelegateModal(
+                    selectedRowKeys.map(String),
+                    activeTab as 'checklist' | 'review_element',
+                  )}>
+                  批量委派 ({selectedRowKeys.length})
+                </Button>
+              )}
               <Divider type="vertical" />
             </>
           )}
