@@ -467,13 +467,18 @@ export default function WorkbenchPage() {
         );
         const showEntry = isInProgress && canEntry && (hasEntryRole || isDelegatedEntry);
 
+        const isDelegatedReview = [
+          ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
+          ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
+        ].some((i) => i.reviewDelegatedTo?.includes(currentUser.id));
+
         const isInReview = record.pipeline.maintenanceReview === 'in_progress';
         const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
           if (rp.reviewStatus !== 'in_progress') return false;
           const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
           return record.team.maintenance.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
         });
-        const showReview = isInProgress && isInReview && hasReviewRole;
+        const showReview = isInProgress && isInReview && (hasReviewRole || isDelegatedReview);
 
         const anyRoleActivelyReviewing = record.pipeline.roleProgress.some(
           (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
