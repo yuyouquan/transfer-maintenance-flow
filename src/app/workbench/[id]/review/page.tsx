@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  message, Tooltip, Divider, Alert,
+  message, Tooltip, Divider, Alert, Collapse,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
@@ -20,6 +20,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
+import DelegateModal from '@/components/shared/DelegateModal';
 
 // Map team role to checklist responsibleRole
 const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
@@ -144,6 +145,24 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   }, [allReviewElements, userResponsibleRole, currentUser.id]);
 
+  // --- 被委派给当前用户的项目(跨角色聚合) ---
+  const delegatedChecklistForMe = useMemo(
+    () => allChecklistItems.filter(
+      (i) => i.reviewDelegatedTo?.includes(currentUser.id),
+    ),
+    [allChecklistItems, currentUser.id],
+  );
+
+  const delegatedReviewElementsForMe = useMemo(
+    () => allReviewElements.filter(
+      (i) => i.reviewDelegatedTo?.includes(currentUser.id),
+    ),
+    [allReviewElements, currentUser.id],
+  );
+
+  const hasDelegatedItems =
+    delegatedChecklistForMe.length > 0 || delegatedReviewElementsForMe.length > 0;
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
 
@@ -166,6 +185,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- All hooks must be above the early return ---
 
   const currentRole = userResponsibleRole ?? 'SPM';
+  const canAccessPage = Boolean(userResponsibleRole) || hasDelegatedItems;
   const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
 
   // 拒绝时把同 application + 同角色的其它「审核中/通过」项重置为「待审核」，
@@ -373,6 +393,21 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       <div style={{ padding: 40, textAlign: 'center' }}>
         <h2>未找到转维申请</h2>
         <Button onClick={() => router.push('/workbench')}>返回</Button>
+      </div>
+    );
+  }
+
+  if (!canAccessPage) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert
+          type="warning"
+          showIcon
+          title="无权访问"
+          description="您不是当前应用任一维护审核角色的负责人,也无被委派项"
+          style={{ maxWidth: 560, margin: '0 auto 16px' }}
+        />
+        <Button onClick={() => router.push('/workbench')}>返回工作台</Button>
       </div>
     );
   }
