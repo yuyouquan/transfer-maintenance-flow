@@ -1,0 +1,39 @@
+flowchart LR
+    Apply["申请创建<br/>application.status=in_progress"]:::trigger
+    Apply -->|"自动注入"| EntryTodo["录入待办<br/>type=entry<br/>研发侧角色责任人"]:::todo
+
+    Submit["{角色} 提交资料录入与AI检查"]:::action
+    EntryTodo --> Submit
+    Submit -->|"撤回该角色录入待办"| Withdraw1["从待办中心移除"]:::remove
+    Submit -->|"注入审核待办"| ReviewTodo["审核待办<br/>type=review<br/>维护侧角色责任人"]:::todo
+
+    PassRole["{角色} 维护审核通过"]:::action
+    ReviewTodo --> PassRole
+    PassRole -->|"撤回该角色审核待办"| Withdraw2["从待办中心移除"]:::remove
+
+    AllPass["全部 5 角色 reviewStatus=passed<br/>↓ 自动 sqaReview=in_progress"]:::auto
+    PassRole --> AllPass
+    AllPass -->|"注入 SQA 待办"| SqaTodo["SQA 审核待办<br/>type=sqa_review<br/>研发侧 SQA"]:::todo
+
+    RejectRole["{角色} 维护审核被拒绝"]:::reject
+    ReviewTodo --> RejectRole
+    RejectRole -->|"撤回该角色审核待办<br/>+ 重新注入录入待办"| EntryTodo
+
+    SqaPass["SQA 审核通过"]:::action
+    SqaTodo --> SqaPass
+    SqaPass -->|"撤回 SQA 待办"| Withdraw3["从待办中心移除"]:::remove
+
+    SqaFail["SQA 不通过<br/>application.status=failed"]:::reject
+    SqaTodo --> SqaFail
+    SqaFail -->|"撤回所有相关待办"| WithdrawAll["从待办中心全部移除"]:::remove
+
+    Closed["申请关闭<br/>application.status=cancelled"]:::reject
+    Apply -.-> Closed
+    Closed --> WithdrawAll
+
+    classDef trigger fill:#fffbeb,stroke:#f59e0b,color:#92400e;
+    classDef todo fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef action fill:#f0f9ff,stroke:#0ea5e9,color:#075985;
+    classDef remove fill:#f1f5f9,stroke:#64748b,color:#334155;
+    classDef auto fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef reject fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;

@@ -1,0 +1,33 @@
+flowchart TD
+    Pre["全部 5 角色 维护审核 passed<br/>↓ 系统自动<br/>maintenanceReview = success<br/>sqaReview = in_progress"]:::trigger
+
+    Pre --> Enter["SQA 用户进入审核页"]:::start
+    Enter --> Decide{"决策"}:::decision
+
+    Decide -->|"通过"| ApproveCheck{"评审意见<br/>是否填写?"}:::decision
+    ApproveCheck -->|"是"| ApproveDo["sqaReview = success<br/>infoChange = in_progress<br/>历史『SQA 审核通过』"]:::pass
+    ApproveCheck -->|"否"| ApproveDo
+
+    Decide -->|"不通过"| RejectCheck{"评审意见<br/>是否填写?"}:::decision
+    RejectCheck -->|"否"| RejectBlock["阻止提交<br/>提示必填"]:::warn
+    RejectCheck -->|"是"| RejectDo["application.status = failed<br/>failureReason = 评审意见<br/>sqaReview = failed<br/>历史『SQA 关闭流水线』"]:::reject
+
+    ApproveDo --> SuccessNext["进入信息变更阶段<br/>(本期不展开)"]:::next
+
+    RejectDo --> FailureView["§5.2 列表行<br/>显示『重开』按钮<br/>(项目 SPM / 管理员可见)"]:::failure
+    FailureView --> Reopen{"是否重开?"}:::decision
+    Reopen -->|"是"| ReopenFlow["§5.3 申请页 项目锁定<br/>回填团队 / 计划 / 备注<br/>新建 application<br/>原 application.reopenedAsId<br/>指向新 application.id"]:::reopen
+    Reopen -->|"否"| End["流程终止"]:::end_
+
+    ReopenFlow --> NewLoop["新 application 进入<br/>资料录入与AI检查阶段"]:::next
+
+    classDef trigger fill:#fffbeb,stroke:#f59e0b,color:#92400e;
+    classDef start fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef decision fill:#fdf4ff,stroke:#a855f7,color:#7e22ce;
+    classDef pass fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef reject fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+    classDef warn fill:#fff7ed,stroke:#fb923c,color:#9a3412;
+    classDef next fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef failure fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+    classDef reopen fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef end_ fill:#f1f5f9,stroke:#64748b,color:#334155;

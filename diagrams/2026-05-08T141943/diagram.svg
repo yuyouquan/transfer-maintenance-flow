@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <defs>
+    <linearGradient id="pmsBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <linearGradient id="tmBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ecfdf5"/>
+      <stop offset="100%" stop-color="#d1fae5"/>
+    </linearGradient>
+    <linearGradient id="cardPms" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f5f3ff"/>
+    </linearGradient>
+    <linearGradient id="cardTm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f0fdf4"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1400" height="900" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="700" y="55" text-anchor="middle" font-size="28" font-weight="700" fill="#1e1b4b">PMS × 转维电子流系统 — 集成架构</text>
+  <text x="700" y="84" text-anchor="middle" font-size="14" fill="#64748b">PMS 承载入口与导航 · 转维系统沿用全部业务逻辑</text>
+
+  <!-- ==================== LEFT: PMS Panel ==================== -->
+  <rect x="40" y="120" width="540" height="730" rx="14" fill="url(#pmsBg)" stroke="#a5b4fc" stroke-width="1.5"/>
+  <text x="68" y="160" font-size="20" font-weight="700" fill="#3730a3">项目管理系统 (PMS)</text>
+  <text x="68" y="183" font-size="13" fill="#6366f1">Entry Points · Containers</text>
+  <line x1="68" y1="200" x2="552" y2="200" stroke="#c7d2fe" stroke-width="1"/>
+
+  <!-- PMS Card 1: 项目空间·基础信息·申请转维入口 -->
+  <g filter="url(#shadow)">
+    <rect x="68" y="225" width="484" height="115" rx="10" fill="url(#cardPms)" stroke="#6366f1" stroke-width="1.5"/>
+    <circle cx="100" cy="258" r="16" fill="#6366f1"/>
+    <text x="100" y="265" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">①</text>
+    <text x="130" y="252" font-size="16" font-weight="600" fill="#1e1b4b">项目空间 · 基础信息 · 申请转维</text>
+    <text x="130" y="275" font-size="12" fill="#64748b">整机产品项目顶部按钮，项目级唯一入口</text>
+    <text x="130" y="297" font-size="12" fill="#64748b">点击 → 打开转维申请页（项目自动锁定）</text>
+    <rect x="130" y="312" width="92" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="176" y="327" text-anchor="middle" font-size="11" fill="#4338ca">ProjectSpaceContainer</text>
+    <rect x="232" y="312" width="62" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="263" y="327" text-anchor="middle" font-size="11" fill="#4338ca">仅整机</text>
+  </g>
+
+  <!-- PMS Card 2: 项目空间·基础信息·转维信息模块 -->
+  <g filter="url(#shadow)">
+    <rect x="68" y="360" width="484" height="135" rx="10" fill="url(#cardPms)" stroke="#6366f1" stroke-width="1.5"/>
+    <circle cx="100" cy="395" r="16" fill="#6366f1"/>
+    <text x="100" y="402" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">②</text>
+    <text x="130" y="389" font-size="16" font-weight="600" fill="#1e1b4b">项目空间 · 基础信息 · 转维信息模块</text>
+    <text x="130" y="412" font-size="12" fill="#64748b">单项目维度的转维申请列表（替代旧工作台</text>
+    <text x="130" y="430" font-size="12" fill="#64748b">的全局列表），按状态展示行内操作按钮</text>
+    <rect x="130" y="446" width="78" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="169" y="461" text-anchor="middle" font-size="11" fill="#4338ca">section-transfer</text>
+    <rect x="218" y="446" width="62" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="249" y="461" text-anchor="middle" font-size="11" fill="#4338ca">详情/录入</text>
+    <rect x="290" y="446" width="62" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="321" y="461" text-anchor="middle" font-size="11" fill="#4338ca">评审/SQA</text>
+    <rect x="362" y="446" width="46" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="385" y="461" text-anchor="middle" font-size="11" fill="#4338ca">关闭</text>
+  </g>
+
+  <!-- PMS Card 3: 工作台·待办中心 -->
+  <g filter="url(#shadow)">
+    <rect x="68" y="515" width="484" height="115" rx="10" fill="url(#cardPms)" stroke="#6366f1" stroke-width="1.5"/>
+    <circle cx="100" cy="548" r="16" fill="#6366f1"/>
+    <text x="100" y="555" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">③</text>
+    <text x="130" y="542" font-size="16" font-weight="600" fill="#1e1b4b">工作台 · 待办中心</text>
+    <text x="130" y="565" font-size="12" fill="#64748b">PMS 待办中心承载转维流程的节点级待办，</text>
+    <text x="130" y="583" font-size="12" fill="#64748b">替代旧工作台的右侧待办面板</text>
+    <rect x="130" y="599" width="80" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="170" y="614" text-anchor="middle" font-size="11" fill="#4338ca">WorkspaceModule</text>
+    <rect x="220" y="599" width="84" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="262" y="614" text-anchor="middle" font-size="11" fill="#4338ca">type=transfer</text>
+  </g>
+
+  <!-- PMS Card 4: 配置中心·转维材料模板 -->
+  <g filter="url(#shadow)">
+    <rect x="68" y="650" width="484" height="115" rx="10" fill="url(#cardPms)" stroke="#6366f1" stroke-width="1.5"/>
+    <circle cx="100" cy="683" r="16" fill="#6366f1"/>
+    <text x="100" y="690" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">④</text>
+    <text x="130" y="677" font-size="16" font-weight="600" fill="#1e1b4b">配置中心 · 转维材料模板配置</text>
+    <text x="130" y="700" font-size="12" fill="#64748b">作为配置中心的一个 tab，承载 CheckList</text>
+    <text x="130" y="718" font-size="12" fill="#64748b">/ 评审要素模板的版本化管理</text>
+    <rect x="130" y="734" width="74" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="167" y="749" text-anchor="middle" font-size="11" fill="#4338ca">ConfigContainer</text>
+    <rect x="214" y="734" width="92" height="22" rx="11" fill="#eef2ff" stroke="#a5b4fc"/>
+    <text x="260" y="749" text-anchor="middle" font-size="11" fill="#4338ca">configTab=transfer</text>
+  </g>
+
+  <!-- Deprecation note bottom -->
+  <rect x="68" y="785" width="484" height="48" rx="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="84" y="804" font-size="12" font-weight="600" fill="#b91c1c">已废弃</text>
+  <text x="138" y="804" font-size="12" fill="#7f1d1d">旧独立工作台 / workbench（全局列表 + 申请按钮 + 待办面板）</text>
+  <text x="84" y="822" font-size="11" fill="#991b1b">迁移：列表 → ②、申请按钮 → ①、待办 → ③、配置中心 → ④</text>
+
+  <!-- ==================== CENTER: arrows ==================== -->
+  <!-- Arrow 1: ① → 申请页 -->
+  <path d="M 555 282 L 700 282 L 700 240 L 820 240" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,240 812,236 812,244" fill="#6366f1"/>
+  <rect x="615" y="263" width="80" height="22" rx="4" fill="#ffffff" stroke="#a5b4fc"/>
+  <text x="655" y="278" text-anchor="middle" font-size="11" fill="#4338ca">打开 / 锁定项目</text>
+
+  <!-- Arrow 2: ② → 详情/录入/审核/SQA (fan out) -->
+  <path d="M 555 425 L 690 425 L 690 350 L 820 350" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,350 812,346 812,354" fill="#6366f1"/>
+  <path d="M 690 425 L 820 425" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,425 812,421 812,429" fill="#6366f1"/>
+  <path d="M 690 425 L 690 500 L 820 500" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,500 812,496 812,504" fill="#6366f1"/>
+  <path d="M 690 500 L 690 575 L 820 575" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,575 812,571 812,579" fill="#6366f1"/>
+  <rect x="615" y="438" width="80" height="22" rx="4" fill="#ffffff" stroke="#a5b4fc"/>
+  <text x="655" y="453" text-anchor="middle" font-size="11" fill="#4338ca">行内操作跳转</text>
+
+  <!-- Arrow 3: ③ → 各业务页 (汇聚右上 indicator) -->
+  <path d="M 555 572 L 765 572 L 765 660 L 820 660" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 3"/>
+  <polygon points="820,660 812,656 812,664" fill="#6366f1"/>
+  <rect x="610" y="558" width="100" height="22" rx="4" fill="#ffffff" stroke="#a5b4fc"/>
+  <text x="660" y="573" text-anchor="middle" font-size="11" fill="#4338ca">待办分发到节点</text>
+
+  <!-- Arrow 4: ④ → 配置 -->
+  <path d="M 555 707 L 740 707 L 740 760 L 820 760" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="820,760 812,756 812,764" fill="#6366f1"/>
+  <rect x="615" y="690" width="78" height="22" rx="4" fill="#ffffff" stroke="#a5b4fc"/>
+  <text x="654" y="705" text-anchor="middle" font-size="11" fill="#4338ca">承载模板配置</text>
+
+  <!-- ==================== RIGHT: Transfer System Panel ==================== -->
+  <rect x="820" y="120" width="540" height="730" rx="14" fill="url(#tmBg)" stroke="#86efac" stroke-width="1.5"/>
+  <text x="848" y="160" font-size="20" font-weight="700" fill="#065f46">转维电子流系统</text>
+  <text x="848" y="183" font-size="13" fill="#10b981">Business Logic · Views · Workflow</text>
+  <line x1="848" y1="200" x2="1332" y2="200" stroke="#86efac" stroke-width="1"/>
+
+  <!-- TM Card A: 申请页 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="220" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="252" r="14" fill="#10b981"/>
+    <text x="876" y="258" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">A</text>
+    <text x="902" y="248" font-size="15" font-weight="600" fill="#064e3b">申请页 (Apply)</text>
+    <text x="902" y="269" font-size="12" fill="#475569">项目锁定 · 团队配置 · 计划评审日期</text>
+    <text x="902" y="287" font-size="11" fill="#94a3b8">/workbench/apply  &lt;TransferApply&gt;</text>
+  </g>
+
+  <!-- TM Card B: 详情页 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="320" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="352" r="14" fill="#10b981"/>
+    <text x="876" y="358" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">B</text>
+    <text x="902" y="348" font-size="15" font-weight="600" fill="#064e3b">详情页 (Detail)</text>
+    <text x="902" y="369" font-size="12" fill="#475569">流水线进度 · 检查项 · 评审要素 · 历史</text>
+    <text x="902" y="387" font-size="11" fill="#94a3b8">/workbench/[id]  &lt;TransferDetail&gt;</text>
+  </g>
+
+  <!-- TM Card C: 资料录入与AI检查 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="420" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="452" r="14" fill="#10b981"/>
+    <text x="876" y="458" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">C</text>
+    <text x="902" y="448" font-size="15" font-weight="600" fill="#064e3b">资料录入与AI检查 (Entry)</text>
+    <text x="902" y="469" font-size="12" fill="#475569">驳回 Collapse · Block 任务 · 二次提交确认</text>
+    <text x="902" y="487" font-size="11" fill="#94a3b8">/workbench/[id]/entry  &lt;TransferEntry&gt;</text>
+  </g>
+
+  <!-- TM Card D: 维护审核 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="520" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="552" r="14" fill="#10b981"/>
+    <text x="876" y="558" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">D</text>
+    <text x="902" y="548" font-size="15" font-weight="600" fill="#064e3b">维护审核 (Review)</text>
+    <text x="902" y="569" font-size="12" fill="#475569">逐项 / 批量 / 整角色通过或驳回（含 Block）</text>
+    <text x="902" y="587" font-size="11" fill="#94a3b8">/workbench/[id]/review  &lt;TransferReview&gt;</text>
+  </g>
+
+  <!-- TM Card E: SQA审核 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="620" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="652" r="14" fill="#10b981"/>
+    <text x="876" y="658" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">E</text>
+    <text x="902" y="648" font-size="15" font-weight="600" fill="#064e3b">SQA 审核 (SqaReview)</text>
+    <text x="902" y="669" font-size="12" fill="#475569">通过 → 信息变更 ; 不通过 → 流水线终止</text>
+    <text x="902" y="687" font-size="11" fill="#94a3b8">/workbench/[id]/sqa-review</text>
+  </g>
+
+  <!-- TM Card F: 配置 -->
+  <g filter="url(#shadow)">
+    <rect x="848" y="720" width="484" height="80" rx="10" fill="url(#cardTm)" stroke="#10b981" stroke-width="1.5"/>
+    <circle cx="876" cy="752" r="14" fill="#10b981"/>
+    <text x="876" y="758" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">F</text>
+    <text x="902" y="748" font-size="15" font-weight="600" fill="#064e3b">模板配置 (TransferConfig)</text>
+    <text x="902" y="769" font-size="12" fill="#475569">CheckList 模板 · 评审要素模板 · 版本化</text>
+    <text x="902" y="787" font-size="11" fill="#94a3b8">configTab=transfer  &lt;TransferConfig&gt;</text>
+  </g>
+
+  <!-- Footer note -->
+  <rect x="848" y="815" width="484" height="20" rx="4" fill="transparent"/>
+  <text x="1090" y="828" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">业务规则与状态机沿用现转维系统，PMS 仅作入口与导航壳</text>
+
+</svg>

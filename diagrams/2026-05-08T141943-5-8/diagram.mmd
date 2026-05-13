@@ -1,0 +1,29 @@
+stateDiagram-v2
+    [*] --> Active: 系统首发版本
+
+    Active --> Draft: 配置员『新建版本』
+    Draft --> Active: 配置员『发布』<br/>（旧 Active 转 Published）
+    Draft --> [*]: 配置员『放弃』
+
+    Active --> Published: 当新版本发布<br/>旧 Active 自动转 Published
+
+    note right of Active
+        生效中
+        - 不可编辑
+        - 用于新申请
+        - 同一时刻有且仅有一个
+    end note
+
+    note right of Draft
+        修订中
+        - 可编辑（增删改条目）
+        - 不用于新申请
+        - 同一时刻最多一个
+    end note
+
+    note right of Published
+        已发布
+        - 历史版本，只读
+        - 不用于新申请
+        - 数量无限
+    end note
