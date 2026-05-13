@@ -500,15 +500,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
-      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
-      render: (text: string, record: CheckListItem) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
+      render: (text: string, record: CheckListItem) => {
+        const reviewDelegatee = record.reviewDelegatedTo?.[0];
+        const reviewDelegateeName = reviewDelegatee
+          ? MOCK_USERS.find((u) => u.id === reviewDelegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {reviewDelegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                审核委派→{reviewDelegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '交付件', key: 'deliverables', width: 180,
@@ -604,15 +615,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
-      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
-      render: (text: string, record: ReviewElement) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
+      render: (text: string, record: ReviewElement) => {
+        const reviewDelegatee = record.reviewDelegatedTo?.[0];
+        const reviewDelegateeName = reviewDelegatee
+          ? MOCK_USERS.find((u) => u.id === reviewDelegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {reviewDelegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                审核委派→{reviewDelegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '交付件', key: 'deliverables', width: 120,
