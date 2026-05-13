@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Table, Button, Tag, Tabs, Select, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse, Badge,
+  Table, Button, Tag, Tabs, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse, Badge,
 } from 'antd';
 import {
   ArrowLeftOutlined, UploadOutlined, DownloadOutlined, CheckCircleOutlined,
@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
+import DelegateModal from '@/components/shared/DelegateModal';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import { MOCK_USERS } from '@/mock';
@@ -177,8 +178,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // Delegate modal - single select, reassign entry person
   const [delegateModalVisible, setDelegateModalVisible] = useState(false);
   const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review' } | null>(null);
-  const [delegatePersonId, setDelegatePersonId] = useState<string | undefined>(undefined);
-
   // AI check detail modal
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
   const [aiDetailContent, setAiDetailContent] = useState('');
@@ -329,17 +328,16 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   const openDelegateModal = useCallback((ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
     setDelegateTarget({ ids, tab });
-    setDelegatePersonId(undefined);
     setDelegateModalVisible(true);
   }, []);
 
-  const handleDelegateConfirm = useCallback(() => {
-    if (!delegateTarget || !delegatePersonId) {
-      message.warning('请选择委派人员');
-      return;
-    }
+  const handleDelegateConfirm = useCallback((toUserId: string | null) => {
+    if (!delegateTarget) return;
 
-    const targetUser = MOCK_USERS.find((u) => u.id === delegatePersonId);
+    // 录入页不允许「清空委派」(底部按钮 disabled),此处 null 直接忽略以维持类型签名
+    if (!toUserId) return;
+
+    const targetUser = MOCK_USERS.find((u) => u.id === toUserId);
     if (!targetUser) return;
 
     const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
@@ -360,9 +358,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
     setDelegateModalVisible(false);
     setDelegateTarget(null);
-    setDelegatePersonId(undefined);
     message.success(`已委派给 ${targetUser.name}，录入责任人已更新`);
-  }, [delegateTarget, delegatePersonId, setChecklistItems, setReviewElements]);
+  }, [delegateTarget, setChecklistItems, setReviewElements]);
 
   // --- Submit review (per active role) ---
 
@@ -1023,40 +1020,17 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       </Modal>
 
       {/* Delegate Modal */}
-      <Modal
-        title="委派任务"
+      <DelegateModal
         open={delegateModalVisible}
+        title="委派任务"
+        selectedCount={delegateTarget?.ids.length ?? 0}
+        excludeUserIds={[currentUser.id]}
+        onConfirm={handleDelegateConfirm}
         onCancel={() => {
           setDelegateModalVisible(false);
           setDelegateTarget(null);
-          setDelegatePersonId(undefined);
         }}
-        onOk={handleDelegateConfirm}
-        okText="确认委派"
-        cancelText="取消"
-        width={500}
-        destroyOnHidden
-      >
-        <div style={{ marginBottom: 8, color: '#666' }}>
-          选择委派人员（将替换当前录入责任人）
-        </div>
-        <Select
-          style={{ width: '100%' }}
-          placeholder="选择委派人员"
-          value={delegatePersonId}
-          onChange={setDelegatePersonId}
-          options={MOCK_USERS.filter((u) => u.id !== currentUser.id).map((u) => ({
-            value: u.id,
-            label: `${u.name} (${u.role} - ${u.department})`,
-          }))}
-          optionFilterProp="label"
-        />
-        {delegateTarget && (
-          <div style={{ marginTop: 12, color: '#999', fontSize: 12 }}>
-            将委派 {delegateTarget.ids.length} 项任务
-          </div>
-        )}
-      </Modal>
+      />
 
       {/* AI Check Detail Modal */}
       <Modal
