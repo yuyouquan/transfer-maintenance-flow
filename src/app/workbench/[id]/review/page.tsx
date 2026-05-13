@@ -717,39 +717,39 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Sticky review action bar */}
-      <div style={{
-        background: '#fff',
-        borderRadius: 8,
-        padding: '12px 20px',
-        marginBottom: 16,
-        position: 'sticky',
-        top: 56,
-        zIndex: 10,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-        border: '1px solid #f0f0f0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>
-            评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
-          </span>
-          <span style={{ color: '#666', fontSize: 13 }}>
-            负责人：{maintenanceMember?.name ?? '-'}
-          </span>
-        </div>
-        <Space size={8}>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Button size="small" onClick={() => handleBatchReview('passed')}
-                style={{ color: '#52c41a', borderColor: '#b7eb8f' }}>
-                批量通过 ({selectedRowKeys.length})
-              </Button>
-              <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
-                批量不通过 ({selectedRowKeys.length})
-              </Button>
-              {userResponsibleRole && (
+      {userResponsibleRole && (
+        <div style={{
+          background: '#fff',
+          borderRadius: 8,
+          padding: '12px 20px',
+          marginBottom: 16,
+          position: 'sticky',
+          top: 56,
+          zIndex: 10,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #f0f0f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>
+              评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
+            </span>
+            <span style={{ color: '#666', fontSize: 13 }}>
+              负责人：{maintenanceMember?.name ?? '-'}
+            </span>
+          </div>
+          <Space size={8}>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button size="small" onClick={() => handleBatchReview('passed')}
+                  style={{ color: '#52c41a', borderColor: '#b7eb8f' }}>
+                  批量通过 ({selectedRowKeys.length})
+                </Button>
+                <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
+                  批量不通过 ({selectedRowKeys.length})
+                </Button>
                 <Button size="small"
                   onClick={() => openDelegateModal(
                     selectedRowKeys.map(String),
@@ -757,59 +757,115 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                   )}>
                   批量委派 ({selectedRowKeys.length})
                 </Button>
-              )}
-              <Divider type="vertical" />
-            </>
-          )}
-          <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
-            不通过
-          </Button>
-          <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
-            style={{ background: '#52c41a', borderColor: '#52c41a' }}>
-            通过
-          </Button>
-        </Space>
-      </div>
+                <Divider type="vertical" />
+              </>
+            )}
+            <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
+              不通过
+            </Button>
+            <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
+              style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+              通过
+            </Button>
+          </Space>
+        </div>
+      )}
+
+      {/* 委派给我的(跨角色聚合) */}
+      {hasDelegatedItems && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 0, marginBottom: 16 }}>
+          <Collapse
+            defaultActiveKey={['delegated-to-me']}
+            items={[
+              {
+                key: 'delegated-to-me',
+                label: (
+                  <span style={{ fontWeight: 600 }}>
+                    委派给我的 ({delegatedChecklistForMe.length + delegatedReviewElementsForMe.length} 项)
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {delegatedChecklistForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          转维材料 ({delegatedChecklistForMe.length})
+                        </div>
+                        <Table<CheckListItem>
+                          rowKey="id"
+                          columns={checklistColumns}
+                          dataSource={delegatedChecklistForMe}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1600 }}
+                          style={{ marginBottom: 16 }}
+                        />
+                      </>
+                    )}
+                    {delegatedReviewElementsForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          评审要素 ({delegatedReviewElementsForMe.length})
+                        </div>
+                        <Table<ReviewElement>
+                          rowKey="id"
+                          columns={reviewElementColumns}
+                          dataSource={delegatedReviewElementsForMe}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1700 }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Main content */}
-      <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => { setActiveTab(key); setSelectedRowKeys([]); }}
-          items={[
-            {
-              key: 'checklist',
-              label: `转维材料 (${checklistItems.length})`,
-              children: (
-                <Table<CheckListItem>
-                  rowKey="id"
-                  columns={checklistColumns}
-                  dataSource={checklistItems}
-                  rowSelection={rowSelection}
-                  scroll={{ x: 1600 }}
-                  pagination={false}
-                  size="middle"
-                />
-              ),
-            },
-            {
-              key: 'review_element',
-              label: `评审要素 (${reviewElements.length})`,
-              children: (
-                <Table<ReviewElement>
-                  rowKey="id"
-                  columns={reviewElementColumns}
-                  dataSource={reviewElements}
-                  rowSelection={rowSelection}
-                  scroll={{ x: 1700 }}
-                  pagination={false}
-                  size="middle"
-                />
-              ),
-            },
-          ]}
-        />
-      </div>
+      {userResponsibleRole && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => { setActiveTab(key); setSelectedRowKeys([]); }}
+            items={[
+              {
+                key: 'checklist',
+                label: `转维材料 (${checklistItems.length})`,
+                children: (
+                  <Table<CheckListItem>
+                    rowKey="id"
+                    columns={checklistColumns}
+                    dataSource={checklistItems}
+                    rowSelection={rowSelection}
+                    scroll={{ x: 1600 }}
+                    pagination={false}
+                    size="middle"
+                  />
+                ),
+              },
+              {
+                key: 'review_element',
+                label: `评审要素 (${reviewElements.length})`,
+                children: (
+                  <Table<ReviewElement>
+                    rowKey="id"
+                    columns={reviewElementColumns}
+                    dataSource={reviewElements}
+                    rowSelection={rowSelection}
+                    scroll={{ x: 1700 }}
+                    pagination={false}
+                    size="middle"
+                  />
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Pass Modal */}
       <Modal
