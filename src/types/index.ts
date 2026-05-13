@@ -116,6 +116,7 @@ export interface CheckListItem {
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
   readonly delegatedTo?: ReadonlyArray<string>;
+  readonly reviewDelegatedTo?: ReadonlyArray<string>;
 }
 
 // --- 评审要素 ---
@@ -141,6 +142,7 @@ export interface ReviewElement {
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
   readonly delegatedTo?: ReadonlyArray<string>;
+  readonly reviewDelegatedTo?: ReadonlyArray<string>;
 }
 
 // --- 交付件 ---
