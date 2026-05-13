@@ -166,6 +166,14 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
 
+  // Delegate modal
+  const [delegateModalOpen, setDelegateModalOpen] = useState(false);
+  const [delegateTarget, setDelegateTarget] = useState<{
+    ids: ReadonlyArray<string>;
+    tab: 'checklist' | 'review_element';
+  } | null>(null);
+  const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
+
   // Modals
   const [passModalOpen, setPassModalOpen] = useState(false);
   const [failModalOpen, setFailModalOpen] = useState(false);
@@ -268,6 +276,53 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setSelectedRowKeys([]);
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
   }, [activeTab, selectedRowKeys, allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
+
+  const openDelegateModal = useCallback(
+    (ids: ReadonlyArray<string>, tab: 'checklist' | 'review_element') => {
+      // 当对单条委派(ids.length === 1)且该条已有 reviewDelegatedTo,回填以便支持转委派
+      let current: string | null = null;
+      if (ids.length === 1) {
+        const item = tab === 'checklist'
+          ? allChecklistItems.find((i) => i.id === ids[0])
+          : allReviewElements.find((i) => i.id === ids[0]);
+        current = item?.reviewDelegatedTo?.[0] ?? null;
+      }
+      setDelegateTarget({ ids, tab });
+      setDelegateCurrentAssignee(current);
+      setDelegateModalOpen(true);
+    },
+    [allChecklistItems, allReviewElements],
+  );
+
+  const handleDelegateConfirm = useCallback((toUserId: string | null) => {
+    if (!delegateTarget) return;
+    const idSet = new Set(delegateTarget.ids);
+
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!idSet.has(item.id)) return item;
+      return {
+        ...item,
+        reviewDelegatedTo: toUserId ? [toUserId] : undefined,
+      };
+    };
+
+    if (delegateTarget.tab === 'checklist') {
+      setAllChecklistItems((prev) => prev.map(updateItem));
+    } else {
+      setAllReviewElements((prev) => prev.map(updateItem));
+    }
+
+    setDelegateModalOpen(false);
+    setDelegateTarget(null);
+    setDelegateCurrentAssignee(null);
+    setSelectedRowKeys([]);
+    if (toUserId) {
+      const u = MOCK_USERS.find((x) => x.id === toUserId);
+      message.success(`已委派给 ${u?.name ?? '指定人员'}`);
+    } else {
+      message.success('已取消委派');
+    }
+  }, [delegateTarget, setAllChecklistItems, setAllReviewElements]);
 
   // Helper: update all items of current role to a given reviewStatus
   const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus, comment?: string) => {
@@ -851,6 +906,20 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           新增 Block 行
         </Button>
       </Modal>
+
+      <DelegateModal
+        open={delegateModalOpen}
+        title="委派审核"
+        selectedCount={delegateTarget?.ids.length ?? 0}
+        currentAssignee={delegateCurrentAssignee}
+        excludeUserIds={[currentUser.id]}
+        onConfirm={handleDelegateConfirm}
+        onCancel={() => {
+          setDelegateModalOpen(false);
+          setDelegateTarget(null);
+          setDelegateCurrentAssignee(null);
+        }}
+      />
 
     </div>
   );
