@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  message, Tooltip, Divider, Alert,
+  message, Tooltip, Divider, Alert, Collapse,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
@@ -20,6 +20,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
+import DelegateModal from '@/components/shared/DelegateModal';
 
 // Map team role to checklist responsibleRole
 const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
@@ -144,8 +145,34 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   }, [allReviewElements, userResponsibleRole, currentUser.id]);
 
+  // --- 被委派给当前用户的项目(跨角色聚合) ---
+  const delegatedChecklistForMe = useMemo(
+    () => allChecklistItems.filter(
+      (i) => i.reviewDelegatedTo?.includes(currentUser.id),
+    ),
+    [allChecklistItems, currentUser.id],
+  );
+
+  const delegatedReviewElementsForMe = useMemo(
+    () => allReviewElements.filter(
+      (i) => i.reviewDelegatedTo?.includes(currentUser.id),
+    ),
+    [allReviewElements, currentUser.id],
+  );
+
+  const hasDelegatedItems =
+    delegatedChecklistForMe.length > 0 || delegatedReviewElementsForMe.length > 0;
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
+
+  // Delegate modal
+  const [delegateModalOpen, setDelegateModalOpen] = useState(false);
+  const [delegateTarget, setDelegateTarget] = useState<{
+    ids: ReadonlyArray<string>;
+    tab: 'checklist' | 'review_element';
+  } | null>(null);
+  const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
 
   // Modals
   const [passModalOpen, setPassModalOpen] = useState(false);
@@ -166,6 +193,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- All hooks must be above the early return ---
 
   const currentRole = userResponsibleRole ?? 'SPM';
+  const canAccessPage = Boolean(userResponsibleRole) || hasDelegatedItems;
   const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
 
   // 拒绝时把同 application + 同角色的其它「审核中/通过」项重置为「待审核」，
@@ -248,6 +276,53 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setSelectedRowKeys([]);
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
   }, [activeTab, selectedRowKeys, allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
+
+  const openDelegateModal = useCallback(
+    (ids: ReadonlyArray<string>, tab: 'checklist' | 'review_element') => {
+      // 当对单条委派(ids.length === 1)且该条已有 reviewDelegatedTo,回填以便支持转委派
+      let current: string | null = null;
+      if (ids.length === 1) {
+        const item = tab === 'checklist'
+          ? allChecklistItems.find((i) => i.id === ids[0])
+          : allReviewElements.find((i) => i.id === ids[0]);
+        current = item?.reviewDelegatedTo?.[0] ?? null;
+      }
+      setDelegateTarget({ ids, tab });
+      setDelegateCurrentAssignee(current);
+      setDelegateModalOpen(true);
+    },
+    [allChecklistItems, allReviewElements],
+  );
+
+  const handleDelegateConfirm = useCallback((toUserId: string | null) => {
+    if (!delegateTarget) return;
+    const idSet = new Set(delegateTarget.ids);
+
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!idSet.has(item.id)) return item;
+      return {
+        ...item,
+        reviewDelegatedTo: toUserId ? [toUserId] : undefined,
+      };
+    };
+
+    if (delegateTarget.tab === 'checklist') {
+      setAllChecklistItems((prev) => prev.map(updateItem));
+    } else {
+      setAllReviewElements((prev) => prev.map(updateItem));
+    }
+
+    setDelegateModalOpen(false);
+    setDelegateTarget(null);
+    setDelegateCurrentAssignee(null);
+    setSelectedRowKeys([]);
+    if (toUserId) {
+      const u = MOCK_USERS.find((x) => x.id === toUserId);
+      message.success(`已委派给 ${u?.name ?? '指定人员'}`);
+    } else {
+      message.success('已取消委派');
+    }
+  }, [delegateTarget, setAllChecklistItems, setAllReviewElements]);
 
   // Helper: update all items of current role to a given reviewStatus
   const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus, comment?: string) => {
@@ -377,6 +452,21 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   }
 
+  if (!canAccessPage) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert
+          type="warning"
+          showIcon
+          title="无权访问"
+          description="您不是当前应用任一维护审核角色的负责人,也无被委派项"
+          style={{ maxWidth: 560, margin: '0 auto 16px' }}
+        />
+        <Button onClick={() => router.push('/workbench')}>返回工作台</Button>
+      </div>
+    );
+  }
+
   if (application.status !== 'in_progress') {
     const statusText = application.status === 'failed'
       ? 'SQA 审核未通过，流程已终止'
@@ -410,15 +500,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
-      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
-      render: (text: string, record: CheckListItem) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
+      render: (text: string, record: CheckListItem) => {
+        const reviewDelegatee = record.reviewDelegatedTo?.[0];
+        const reviewDelegateeName = reviewDelegatee
+          ? MOCK_USERS.find((u) => u.id === reviewDelegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {reviewDelegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                审核委派→{reviewDelegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '交付件', key: 'deliverables', width: 180,
@@ -459,22 +560,37 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
-      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
+      title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: CheckListItem) => {
+        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
+        const canReviewItem = isRoleOwner || isDelegatedToMe;
+        const canDelegate = isRoleOwner || isDelegatedToMe;
+
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
         return (
           <Space size={4}>
-            <Button type="link" size="small" icon={<CheckCircleOutlined />}
-              style={{ color: '#52c41a' }}
-              onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
-              通过
-            </Button>
-            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-              onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
-              拒绝
-            </Button>
+            {canReviewItem && (
+              <>
+                <Button type="link" size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a' }}
+                  onClick={() => handleItemReview(record.id, 'checklist', 'passed')}>
+                  通过
+                </Button>
+                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+                  onClick={() => handleItemReview(record.id, 'checklist', 'rejected')}>
+                  拒绝
+                </Button>
+              </>
+            )}
+            {canDelegate && (
+              <Button type="link" size="small"
+                onClick={() => openDelegateModal([record.id], 'checklist')}>
+                委派
+              </Button>
+            )}
           </Space>
         );
       },
@@ -499,15 +615,26 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
-      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 130, align: 'center',
-      render: (text: string, record: ReviewElement) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
+      render: (text: string, record: ReviewElement) => {
+        const reviewDelegatee = record.reviewDelegatedTo?.[0];
+        const reviewDelegateeName = reviewDelegatee
+          ? MOCK_USERS.find((u) => u.id === reviewDelegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {reviewDelegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                审核委派→{reviewDelegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '交付件', key: 'deliverables', width: 120,
@@ -548,22 +675,37 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
-      title: '操作', key: 'actions', width: 140, align: 'center', fixed: 'right',
+      title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: ReviewElement) => {
+        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
+        const canReviewItem = isRoleOwner || isDelegatedToMe;
+        const canDelegate = isRoleOwner || isDelegatedToMe;
+
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
         return (
           <Space size={4}>
-            <Button type="link" size="small" icon={<CheckCircleOutlined />}
-              style={{ color: '#52c41a' }}
-              onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
-              通过
-            </Button>
-            <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
-              onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
-              拒绝
-            </Button>
+            {canReviewItem && (
+              <>
+                <Button type="link" size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a' }}
+                  onClick={() => handleItemReview(record.id, 'review_element', 'passed')}>
+                  通过
+                </Button>
+                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}
+                  onClick={() => handleItemReview(record.id, 'review_element', 'rejected')}>
+                  拒绝
+                </Button>
+              </>
+            )}
+            {canDelegate && (
+              <Button type="link" size="small"
+                onClick={() => openDelegateModal([record.id], 'review_element')}>
+                委派
+              </Button>
+            )}
           </Space>
         );
       },
@@ -597,90 +739,155 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Sticky review action bar */}
-      <div style={{
-        background: '#fff',
-        borderRadius: 8,
-        padding: '12px 20px',
-        marginBottom: 16,
-        position: 'sticky',
-        top: 56,
-        zIndex: 10,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-        border: '1px solid #f0f0f0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>
-            评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
-          </span>
-          <span style={{ color: '#666', fontSize: 13 }}>
-            负责人：{maintenanceMember?.name ?? '-'}
-          </span>
+      {userResponsibleRole && (
+        <div style={{
+          background: '#fff',
+          borderRadius: 8,
+          padding: '12px 20px',
+          marginBottom: 16,
+          position: 'sticky',
+          top: 56,
+          zIndex: 10,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          border: '1px solid #f0f0f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>
+              评审角色：<Tag color="blue" style={{ fontSize: 13 }}>{currentRole}</Tag>
+            </span>
+            <span style={{ color: '#666', fontSize: 13 }}>
+              负责人：{maintenanceMember?.name ?? '-'}
+            </span>
+          </div>
+          <Space size={8}>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button size="small" onClick={() => handleBatchReview('passed')}
+                  style={{ color: '#52c41a', borderColor: '#b7eb8f' }}>
+                  批量通过 ({selectedRowKeys.length})
+                </Button>
+                <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
+                  批量不通过 ({selectedRowKeys.length})
+                </Button>
+                <Button size="small"
+                  onClick={() => openDelegateModal(
+                    selectedRowKeys.map(String),
+                    activeTab as 'checklist' | 'review_element',
+                  )}>
+                  批量委派 ({selectedRowKeys.length})
+                </Button>
+                <Divider type="vertical" />
+              </>
+            )}
+            <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
+              不通过
+            </Button>
+            <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
+              style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+              通过
+            </Button>
+          </Space>
         </div>
-        <Space size={8}>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Button size="small" onClick={() => handleBatchReview('passed')}
-                style={{ color: '#52c41a', borderColor: '#b7eb8f' }}>
-                批量通过 ({selectedRowKeys.length})
-              </Button>
-              <Button size="small" danger onClick={() => handleBatchReview('rejected')}>
-                批量不通过 ({selectedRowKeys.length})
-              </Button>
-              <Divider type="vertical" />
-            </>
-          )}
-          <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
-            不通过
-          </Button>
-          <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
-            style={{ background: '#52c41a', borderColor: '#52c41a' }}>
-            通过
-          </Button>
-        </Space>
-      </div>
+      )}
+
+      {/* 委派给我的(跨角色聚合) */}
+      {hasDelegatedItems && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 0, marginBottom: 16 }}>
+          <Collapse
+            defaultActiveKey={['delegated-to-me']}
+            items={[
+              {
+                key: 'delegated-to-me',
+                label: (
+                  <span style={{ fontWeight: 600 }}>
+                    委派给我的 ({delegatedChecklistForMe.length + delegatedReviewElementsForMe.length} 项)
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {delegatedChecklistForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          转维材料 ({delegatedChecklistForMe.length})
+                        </div>
+                        <Table<CheckListItem>
+                          rowKey="id"
+                          columns={checklistColumns}
+                          dataSource={delegatedChecklistForMe}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1600 }}
+                          style={{ marginBottom: 16 }}
+                        />
+                      </>
+                    )}
+                    {delegatedReviewElementsForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          评审要素 ({delegatedReviewElementsForMe.length})
+                        </div>
+                        <Table<ReviewElement>
+                          rowKey="id"
+                          columns={reviewElementColumns}
+                          dataSource={delegatedReviewElementsForMe}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1700 }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Main content */}
-      <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => { setActiveTab(key); setSelectedRowKeys([]); }}
-          items={[
-            {
-              key: 'checklist',
-              label: `转维材料 (${checklistItems.length})`,
-              children: (
-                <Table<CheckListItem>
-                  rowKey="id"
-                  columns={checklistColumns}
-                  dataSource={checklistItems}
-                  rowSelection={rowSelection}
-                  scroll={{ x: 1600 }}
-                  pagination={false}
-                  size="middle"
-                />
-              ),
-            },
-            {
-              key: 'review_element',
-              label: `评审要素 (${reviewElements.length})`,
-              children: (
-                <Table<ReviewElement>
-                  rowKey="id"
-                  columns={reviewElementColumns}
-                  dataSource={reviewElements}
-                  rowSelection={rowSelection}
-                  scroll={{ x: 1700 }}
-                  pagination={false}
-                  size="middle"
-                />
-              ),
-            },
-          ]}
-        />
-      </div>
+      {userResponsibleRole && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => { setActiveTab(key); setSelectedRowKeys([]); }}
+            items={[
+              {
+                key: 'checklist',
+                label: `转维材料 (${checklistItems.length})`,
+                children: (
+                  <Table<CheckListItem>
+                    rowKey="id"
+                    columns={checklistColumns}
+                    dataSource={checklistItems}
+                    rowSelection={rowSelection}
+                    scroll={{ x: 1600 }}
+                    pagination={false}
+                    size="middle"
+                  />
+                ),
+              },
+              {
+                key: 'review_element',
+                label: `评审要素 (${reviewElements.length})`,
+                children: (
+                  <Table<ReviewElement>
+                    rowKey="id"
+                    columns={reviewElementColumns}
+                    dataSource={reviewElements}
+                    rowSelection={rowSelection}
+                    scroll={{ x: 1700 }}
+                    pagination={false}
+                    size="middle"
+                  />
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Pass Modal */}
       <Modal
@@ -816,6 +1023,20 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           新增 Block 行
         </Button>
       </Modal>
+
+      <DelegateModal
+        open={delegateModalOpen}
+        title="委派审核"
+        selectedCount={delegateTarget?.ids.length ?? 0}
+        currentAssignee={delegateCurrentAssignee}
+        excludeUserIds={[currentUser.id]}
+        onConfirm={handleDelegateConfirm}
+        onCancel={() => {
+          setDelegateModalOpen(false);
+          setDelegateTarget(null);
+          setDelegateCurrentAssignee(null);
+        }}
+      />
 
     </div>
   );
