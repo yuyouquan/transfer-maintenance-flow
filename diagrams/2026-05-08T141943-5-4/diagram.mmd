@@ -1,0 +1,28 @@
+flowchart TD
+    A["维护审核驳回<br/>填写评审意见 + Block 任务"]:::reject
+    A --> B["副作用：同角色其它项<br/>reviewing / passed → not_reviewed"]:::side
+    B --> C["研发侧打开资料录入页"]:::dev
+
+    C --> D{"当前角色<br/>有被驳回项?"}:::decision
+    D -->|是| E["顶部红色驳回 Collapse<br/>评审意见 + Block 任务列表"]:::display
+    D -->|否| F["正常录入流程"]:::display
+
+    E --> G["重新录入被驳回项<br/>修改交付件 / 链接"]:::dev
+    G --> H["确认提交<br/>触发 AI 检查"]:::dev
+    H --> I{"AI 检查<br/>通过?"}:::decision
+    I -->|否| G
+    I -->|是| J["项状态自动重置<br/>reviewStatus = not_reviewed<br/>清空 reviewComment"]:::side
+
+    J --> K["全部项就绪<br/>提交按钮启用"]:::display
+    K --> L["点击「提交{角色}审核」"]:::dev
+    L --> M["弹窗：确认 Block 任务已解决<br/>显示该角色 N 项 open Block"]:::display
+    M -->|"确认已解决并提交"| N["1. 角色全部项 reviewStatus → reviewing<br/>2. 该角色 open Block → resolved<br/>3. 历史新增『{角色} 资料录入与AI检查完毕』<br/>   detail 注明 N 项 Block 已解决"]:::side
+    M -->|"取消"| K
+    N --> O["进入维护审核阶段"]:::next
+
+    classDef reject fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+    classDef side fill:#fffbeb,stroke:#f59e0b,color:#92400e;
+    classDef dev fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef decision fill:#fdf4ff,stroke:#a855f7,color:#7e22ce;
+    classDef display fill:#f0f9ff,stroke:#0ea5e9,color:#075985;
+    classDef next fill:#ecfdf5,stroke:#10b981,color:#064e3b;

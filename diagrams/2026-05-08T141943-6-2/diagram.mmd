@@ -1,0 +1,93 @@
+classDiagram
+    class TransferApplication {
+        +string id
+        +string projectId
+        +string applicantId
+        +Status status
+        +PipelineState pipeline
+        +Team team
+        +datetime createdAt
+        +datetime updatedAt
+        +string? failureReason
+        +string? reopenedAsId
+        +string? predecessorId
+    }
+
+    class PipelineState {
+        +NodeStatus projectInit
+        +NodeStatus dataEntry
+        +NodeStatus maintenanceReview
+        +NodeStatus sqaReview
+        +NodeStatus infoChange
+        +RoleProgress[] roleProgress
+    }
+
+    class RoleProgress {
+        +Role role
+        +RoleStatus entryStatus
+        +RoleStatus reviewStatus
+    }
+
+    class CheckListItem {
+        +string id
+        +string applicationId
+        +Role responsibleRole
+        +string entryPersonId
+        +string reviewPersonId
+        +EntryStatus entryStatus
+        +AICheckStatus aiCheckStatus
+        +ReviewStatus reviewStatus
+        +string? reviewComment
+        +string entryContent
+    }
+
+    class ReviewElement {
+        +string id
+        +string applicationId
+        +string standard
+        +string description
+        +string remark
+        +Role responsibleRole
+        +EntryStatus entryStatus
+        +AICheckStatus aiCheckStatus
+        +ReviewStatus reviewStatus
+        +string? reviewComment
+    }
+
+    class BlockTask {
+        +string id
+        +string applicationId
+        +Role responsibleRole
+        +string description
+        +string resolution
+        +string responsiblePerson
+        +date deadline
+        +TaskStatus status
+    }
+
+    class LegacyTask {
+        +string id
+        +string applicationId
+        +string responsiblePerson
+        +string description
+        +date deadline
+        +TaskStatus status
+    }
+
+    class HistoryRecord {
+        +string id
+        +string applicationId
+        +string action
+        +string operator
+        +string detail
+        +datetime timestamp
+    }
+
+    TransferApplication "1" --> "1" PipelineState : pipeline
+    PipelineState "1" --> "5" RoleProgress : roleProgress
+    TransferApplication "1" --> "*" CheckListItem : items
+    TransferApplication "1" --> "*" ReviewElement : elements
+    TransferApplication "1" --> "*" BlockTask : blockTasks
+    TransferApplication "1" --> "*" LegacyTask : legacyTasks
+    TransferApplication "1" --> "*" HistoryRecord : history
+    TransferApplication "0..1" --> "0..1" TransferApplication : reopenedAs / predecessor

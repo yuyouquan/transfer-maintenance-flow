@@ -1,0 +1,34 @@
+flowchart TB
+    Init["项目发起<br/>projectInit = success"]:::done
+
+    Init --> Entry["资料录入与AI检查<br/>dataEntry"]:::node
+    Entry --> Review["维护审核<br/>maintenanceReview"]:::node
+    Review --> SQA["SQA 审核<br/>sqaReview"]:::node
+    SQA --> Info["信息变更<br/>infoChange (本期不展开)"]:::done
+
+    subgraph Roles["角色级派生（5 角色独立追踪）"]
+        direction LR
+        RA["entryStatus<br/>not_started → in_progress<br/>→ completed"]:::role
+        RB["reviewStatus<br/>not_started → in_progress<br/>→ completed / rejected"]:::role
+    end
+
+    Entry -.->|"全部角色 entry=completed<br/>→ dataEntry = success"| Review
+    Review -.->|"全部角色 review=completed<br/>→ maintenanceReview = success<br/>+ sqaReview 自动 in_progress"| SQA
+
+    Bounce["任一角色 reviewStatus=rejected<br/>↓ 视觉回退"]:::reject
+    Review -.-> Bounce
+    Bounce -.->|"资料录入节点圆点 → rejected (红)"| Entry
+    Bounce -.->|"维护审核节点圆点 → not_started (灰)"| Review
+
+    SqaFail["sqaReview = failed<br/>application.status = failed"]:::reject
+    SQA -.->|"SQA 不通过"| SqaFail
+
+    Cancel["application.status = cancelled<br/>申请人关闭"]:::cancel
+    Entry -.-> Cancel
+    Review -.-> Cancel
+
+    classDef done fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef node fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef role fill:#fef3c7,stroke:#f59e0b,color:#92400e;
+    classDef reject fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+    classDef cancel fill:#f1f5f9,stroke:#64748b,color:#334155;

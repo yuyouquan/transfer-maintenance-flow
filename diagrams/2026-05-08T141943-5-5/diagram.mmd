@@ -1,0 +1,36 @@
+flowchart TD
+    Start["维护团队成员进入<br/>{角色} 维护审核页"]:::start
+
+    Start --> Choice{"操作粒度"}:::decision
+    Choice -->|"逐项审核"| Single["选中单个 item<br/>点击 行内 通过/拒绝"]:::action
+    Choice -->|"批量审核"| Batch["勾选多个 item<br/>点击 顶部 批量通过/批量不通过"]:::action
+    Choice -->|"整角色审核"| WholeRole["点击 顶部 通过 / 不通过"]:::action
+
+    Single --> CheckS{"操作类型"}:::decision
+    CheckS -->|"通过"| ItemPass["item.reviewStatus = passed"]:::pass
+    CheckS -->|"拒绝"| ItemReject["item.reviewStatus = rejected<br/>+ 同角色其它<br/>reviewing/passed → not_reviewed"]:::reject
+
+    Batch --> CheckB{"操作类型"}:::decision
+    CheckB -->|"批量通过"| BatchPass["选中项 reviewStatus = passed"]:::pass
+    CheckB -->|"批量不通过"| BatchReject["选中项 reviewStatus = rejected<br/>+ 同角色其它<br/>reviewing/passed → not_reviewed"]:::reject
+
+    WholeRole --> CheckW{"操作类型"}:::decision
+    CheckW -->|"通过"| WholePass["弹窗：可选录入遗留任务<br/>该角色全部 item → passed<br/>历史『{角色} 维护审核通过』"]:::pass
+    CheckW -->|"不通过"| WholeReject["弹窗：必填评审意见<br/>+ 至少 1 项 Block 任务<br/>该角色全部 item:<br/>reviewStatus = rejected<br/>aiCheckStatus = not_started<br/>reviewComment = 评审意见<br/>BlockTask 持久化(责任角色)<br/>历史『{角色} 维护审核被拒绝』"]:::reject
+
+    ItemPass --> Done["保留在审核页继续审"]:::done
+    BatchPass --> Done
+    ItemReject --> Done
+    BatchReject --> Done
+
+    WholePass --> Next["该角色完结<br/>等待全部角色通过 → SQA"]:::next
+    WholeReject --> Bounce["流水线回退：<br/>研发侧资料录入与AI检查页<br/>展示驳回 Collapse"]:::bounce
+
+    classDef start fill:#eef2ff,stroke:#6366f1,color:#3730a3;
+    classDef decision fill:#fdf4ff,stroke:#a855f7,color:#7e22ce;
+    classDef action fill:#f0f9ff,stroke:#0ea5e9,color:#075985;
+    classDef pass fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef reject fill:#fef2f2,stroke:#dc2626,color:#7f1d1d;
+    classDef done fill:#f1f5f9,stroke:#64748b,color:#334155;
+    classDef next fill:#ecfdf5,stroke:#10b981,color:#064e3b;
+    classDef bounce fill:#fffbeb,stroke:#f59e0b,color:#92400e;

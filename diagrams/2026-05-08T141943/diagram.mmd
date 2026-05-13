@@ -1,0 +1,34 @@
+flowchart LR
+    subgraph Module["项目转维模块（PMS 内）"]
+        direction TB
+        subgraph Entries["入口"]
+            direction TB
+            A["① 项目空间·基础信息<br/>申请转维入口"]:::entry
+            B["② 项目空间·基础信息<br/>转维信息模块"]:::entry
+            C["③ 工作台·待办中心"]:::entry
+            D["④ 配置中心·转维材料模板配置"]:::entry
+        end
+
+        subgraph Views["业务视图"]
+            direction TB
+            TA["A. 申请页<br/>项目锁定 / 团队配置"]:::view
+            TB["B. 详情页<br/>流水线 / 历史 / Block"]:::view
+            TC["C. 资料录入与AI检查<br/>含驳回 Collapse / 二次提交"]:::view
+            TD["D. 维护审核<br/>逐项·批量·整角色 通过/驳回"]:::view
+            TE["E. SQA 审核<br/>通过 / 关闭流水线"]:::view
+            TF["F. 模板配置<br/>CheckList · 评审要素"]:::view
+        end
+    end
+
+    A -->|"打开 + 锁定项目"| TA
+    B -->|"行内 详情"| TB
+    B -->|"行内 录入"| TC
+    B -->|"行内 评审"| TD
+    B -->|"行内 SQA审核"| TE
+    C -.->|"待办分发"| TC
+    C -.->|"待办分发"| TD
+    C -.->|"待办分发"| TE
+    D -->|"承载模板"| TF
+
+    classDef entry fill:#eef2ff,stroke:#6366f1,color:#1e1b4b;
+    classDef view fill:#ecfdf5,stroke:#10b981,color:#064e3b;
