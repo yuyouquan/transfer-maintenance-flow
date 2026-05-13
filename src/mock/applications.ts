@@ -43,6 +43,7 @@ interface ItemOverride {
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
   readonly delegatedTo?: ReadonlyArray<string>;
+  readonly reviewDelegatedTo?: ReadonlyArray<string>;
   readonly entryPersonOverride?: { readonly id: string; readonly name: string };
 }
 
@@ -76,6 +77,7 @@ function generateChecklist(
       reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
       reviewComment: ov?.reviewComment,
       delegatedTo: ov?.delegatedTo,
+      reviewDelegatedTo: ov?.reviewDelegatedTo,
     };
   });
 }
@@ -112,6 +114,7 @@ function generateReviewEls(
       reviewStatus: ov?.reviewStatus ?? 'not_reviewed',
       reviewComment: ov?.reviewComment,
       delegatedTo: ov?.delegatedTo,
+      reviewDelegatedTo: ov?.reviewDelegatedTo,
     };
   });
 }
@@ -586,7 +589,9 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
   // 测试 (25-35): all entered+passed, reviewStatus=passed
   for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 底软 (36-46): all entered+passed, reviewStatus=reviewing
+  // index 36: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
   for (let i = 36; i <= 46; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  ov[36] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
   // 系统 (47-51): all entered+passed, reviewStatus=passed
   for (let i = 47; i <= 51; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 影像 (52-59): all entered+passed, reviewStatus=passed
@@ -600,7 +605,9 @@ function makeApp002ReOverrides(): Record<number, ItemOverride> {
   for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED;
   ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
   // 底软 (5-9): reviewing
+  // index 5: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
+  ov[5] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
   // 系统 (10-14): passed
   for (let i = 10; i <= 14; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 影像 (15-19): passed
