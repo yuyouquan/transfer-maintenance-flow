@@ -196,32 +196,9 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const canAccessPage = Boolean(userResponsibleRole) || hasDelegatedItems;
   const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
 
-  // 拒绝时把同 application + 同角色的其它「审核中/通过」项重置为「待审核」，
-  // 让整角色随研发侧修改资料后统一重新审核。
-  const buildRoleResetUpdater = useCallback(
-    (rejectedIds: ReadonlySet<string>, role: string, appId: string) =>
-      <T extends CheckListItem | ReviewElement>(items: T[]): T[] =>
-        items.map((item) => {
-          if (rejectedIds.has(item.id)) return item;
-          if (
-            item.applicationId === appId
-            && item.responsibleRole === role
-            && (item.reviewStatus === 'reviewing' || item.reviewStatus === 'passed')
-          ) {
-            return { ...item, reviewStatus: 'not_reviewed' as const };
-          }
-          return item;
-        }),
-    [],
-  );
-
   // --- Single item review ---
+  // 行内通过/拒绝只影响该条;整角色重审走顶部「不通过」按钮(applyRoleReviewStatus)
   const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
-    const target = type === 'checklist'
-      ? allChecklistItems.find((i) => i.id === itemId)
-      : allReviewElements.find((i) => i.id === itemId);
-    const isReject = newStatus === 'rejected';
-
     if (type === 'checklist') {
       setAllChecklistItems((prev) =>
         prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
@@ -232,19 +209,11 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       );
     }
 
-    if (isReject && target) {
-      const ids = new Set([itemId]);
-      const reset = buildRoleResetUpdater(ids, target.responsibleRole, target.applicationId);
-      setAllChecklistItems(reset);
-      setAllReviewElements(reset);
-    }
-
     message.success(newStatus === 'passed' ? '已通过' : '已标记为不通过');
-  }, [allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
+  }, [setAllChecklistItems, setAllReviewElements]);
 
   // --- Batch review ---
   const handleBatchReview = useCallback((newStatus: ReviewStatus) => {
-    const isReject = newStatus === 'rejected';
     const selectedSet = new Set(selectedRowKeys.map(String));
 
     if (activeTab === 'checklist') {
@@ -261,21 +230,9 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       );
     }
 
-    if (isReject) {
-      const sourceItems = activeTab === 'checklist' ? allChecklistItems : allReviewElements;
-      const rejectedTargets = sourceItems.filter((i) => selectedSet.has(i.id));
-      const roleAppPairs = new Set(rejectedTargets.map((i) => `${i.applicationId}::${i.responsibleRole}`));
-      roleAppPairs.forEach((key) => {
-        const [appId, role] = key.split('::');
-        const reset = buildRoleResetUpdater(selectedSet, role, appId);
-        setAllChecklistItems(reset);
-        setAllReviewElements(reset);
-      });
-    }
-
     setSelectedRowKeys([]);
     message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
-  }, [activeTab, selectedRowKeys, allChecklistItems, allReviewElements, setAllChecklistItems, setAllReviewElements, buildRoleResetUpdater]);
+  }, [activeTab, selectedRowKeys, setAllChecklistItems, setAllReviewElements]);
 
   const openDelegateModal = useCallback(
     (ids: ReadonlyArray<string>, tab: 'checklist' | 'review_element') => {
@@ -567,9 +524,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         const canReviewItem = isRoleOwner || isDelegatedToMe;
         const canDelegate = isRoleOwner || isDelegatedToMe;
 
-        if (record.reviewStatus === 'passed') {
-          return <span style={{ color: '#bfbfbf' }}>-</span>;
-        }
         return (
           <Space size={4}>
             {canReviewItem && (
@@ -682,9 +636,6 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         const canReviewItem = isRoleOwner || isDelegatedToMe;
         const canDelegate = isRoleOwner || isDelegatedToMe;
 
-        if (record.reviewStatus === 'passed') {
-          return <span style={{ color: '#bfbfbf' }}>-</span>;
-        }
         return (
           <Space size={4}>
             {canReviewItem && (
