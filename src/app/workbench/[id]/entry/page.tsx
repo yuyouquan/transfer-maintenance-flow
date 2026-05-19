@@ -752,6 +752,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }
 
+  if (!canAccessPage) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert
+          type="warning"
+          showIcon
+          title="无权访问"
+          description="您不是当前应用任一资料录入角色的负责人,也无被委派项"
+          style={{ maxWidth: 560, margin: '0 auto 16px' }}
+        />
+        <Button onClick={() => router.push('/workbench')}>返回工作台</Button>
+      </div>
+    );
+  }
+
   const selectedKeys = activeTab === 'checklist' ? selectedChecklistKeys : selectedReviewKeys;
 
   return (
@@ -792,7 +807,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* 维护审核驳回提示：默认收起，展开后显示评审意见（一条）+ Block 任务列表（多条） */}
-      {hasRejectedItems && (
+      {userResponsibleRoles.length > 0 && hasRejectedItems && (
         <Collapse
           className="rejection-collapse"
           style={{
@@ -935,91 +950,93 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* Main card */}
-      <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-        {/* Tabs: 转维材料 / 评审要素 */}
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => {
-            setActiveTab(key);
-            setSelectedChecklistKeys([]);
-            setSelectedReviewKeys([]);
-          }}
-          tabBarExtraContent={
-            <Space size={8}>
-              {selectedKeys.length > 0 && (
-                <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], activeTab as 'checklist' | 'review')}>
-                  全部委派 ({selectedKeys.length})
-                </Button>
-              )}
-              {effectiveRole && (
-                <Tooltip title={submitTooltip}>
-                  <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
-                    提交{effectiveRole}审核
+      {userResponsibleRoles.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
+          {/* Tabs: 转维材料 / 评审要素 */}
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => {
+              setActiveTab(key);
+              setSelectedChecklistKeys([]);
+              setSelectedReviewKeys([]);
+            }}
+            tabBarExtraContent={
+              <Space size={8}>
+                {selectedKeys.length > 0 && (
+                  <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], activeTab as 'checklist' | 'review')}>
+                    全部委派 ({selectedKeys.length})
                   </Button>
-                </Tooltip>
-              )}
-              <Button icon={<UploadOutlined />} size="small">导入</Button>
-              <Button icon={<DownloadOutlined />} size="small">导出</Button>
-            </Space>
-          }
-          items={[
-            {
-              key: 'checklist',
-              label: (
-                <Space size={6}>
-                  <span>转维材料 ({ownRoleChecklist.length})</span>
-                  {pendingChecklistCount > 0 && (
-                    <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
-                      <Badge count={pendingChecklistCount} size="small" />
-                    </Tooltip>
-                  )}
-                </Space>
-              ),
-              children: (
-                <Table<CheckListItem>
-                  rowKey="id"
-                  columns={checklistColumns}
-                  dataSource={ownRoleChecklist as CheckListItem[]}
-                  pagination={false}
-                  scroll={{ x: 1600 }}
-                  size="middle"
-                  rowSelection={{
-                    selectedRowKeys: selectedChecklistKeys,
-                    onChange: setSelectedChecklistKeys,
-                  }}
-                />
-              ),
-            },
-            {
-              key: 'review',
-              label: (
-                <Space size={6}>
-                  <span>评审要素 ({ownRoleReviewElements.length})</span>
-                  {pendingReviewCount > 0 && (
-                    <Tooltip title={`还有 ${pendingReviewCount} 项未录入或AI检查未通过`}>
-                      <Badge count={pendingReviewCount} size="small" />
-                    </Tooltip>
-                  )}
-                </Space>
-              ),
-              children: (
-                <Table<ReviewElement>
-                  rowKey="id"
-                  columns={reviewElementColumns}
-                  dataSource={ownRoleReviewElements as ReviewElement[]}
-                  pagination={false}
-                  scroll={{ x: 1700 }}
-                  size="middle"
-                  rowSelection={{
-                    selectedRowKeys: selectedReviewKeys,
-                    onChange: setSelectedReviewKeys,
-                  }}
-                />
-              ),
-            },
-          ]}
-        />
-      </div>
+                )}
+                {effectiveRole && (
+                  <Tooltip title={submitTooltip}>
+                    <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
+                      提交{effectiveRole}审核
+                    </Button>
+                  </Tooltip>
+                )}
+                <Button icon={<UploadOutlined />} size="small">导入</Button>
+                <Button icon={<DownloadOutlined />} size="small">导出</Button>
+              </Space>
+            }
+            items={[
+              {
+                key: 'checklist',
+                label: (
+                  <Space size={6}>
+                    <span>转维材料 ({ownRoleChecklist.length})</span>
+                    {pendingChecklistCount > 0 && (
+                      <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
+                        <Badge count={pendingChecklistCount} size="small" />
+                      </Tooltip>
+                    )}
+                  </Space>
+                ),
+                children: (
+                  <Table<CheckListItem>
+                    rowKey="id"
+                    columns={checklistColumns}
+                    dataSource={ownRoleChecklist as CheckListItem[]}
+                    pagination={false}
+                    scroll={{ x: 1600 }}
+                    size="middle"
+                    rowSelection={{
+                      selectedRowKeys: selectedChecklistKeys,
+                      onChange: setSelectedChecklistKeys,
+                    }}
+                  />
+                ),
+              },
+              {
+                key: 'review',
+                label: (
+                  <Space size={6}>
+                    <span>评审要素 ({ownRoleReviewElements.length})</span>
+                    {pendingReviewCount > 0 && (
+                      <Tooltip title={`还有 ${pendingReviewCount} 项未录入或AI检查未通过`}>
+                        <Badge count={pendingReviewCount} size="small" />
+                      </Tooltip>
+                    )}
+                  </Space>
+                ),
+                children: (
+                  <Table<ReviewElement>
+                    rowKey="id"
+                    columns={reviewElementColumns}
+                    dataSource={ownRoleReviewElements as ReviewElement[]}
+                    pagination={false}
+                    scroll={{ x: 1700 }}
+                    size="middle"
+                    rowSelection={{
+                      selectedRowKeys: selectedReviewKeys,
+                      onChange: setSelectedReviewKeys,
+                    }}
+                  />
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Entry Modal */}
       <Modal
