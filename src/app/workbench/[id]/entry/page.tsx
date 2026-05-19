@@ -334,19 +334,20 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const handleDelegateConfirm = useCallback((toUserId: string | null) => {
     if (!delegateTarget) return;
 
-    // 录入页不允许「清空委派」(底部按钮 disabled),此处 null 直接忽略以维持类型签名
+    // 录入页传 allowClear={false},DelegateModal 不会回传 null;
+    // 保留这条防御性兜底,行为是直接忽略以维持类型签名。
     if (!toUserId) return;
 
     const targetUser = MOCK_USERS.find((u) => u.id === toUserId);
     if (!targetUser) return;
 
+    const idSet = new Set(delegateTarget.ids);
     const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
-      if (!delegateTarget.ids.includes(item.id)) return item;
+      if (!idSet.has(item.id)) return item;
+      // 单人替换式: delegatedTo 始终为新被委派人;不再修改 entryPerson/entryPersonId
       return {
         ...item,
-        entryPerson: targetUser.name,
-        entryPersonId: targetUser.id,
-        delegatedTo: [...new Set([...(item.delegatedTo ?? []), targetUser.id])],
+        delegatedTo: [targetUser.id],
       };
     };
 
@@ -358,7 +359,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
     setDelegateModalVisible(false);
     setDelegateTarget(null);
-    message.success(`已委派给 ${targetUser.name}，录入责任人已更新`);
+    message.success(`已委派给 ${targetUser.name}`);
   }, [delegateTarget, setChecklistItems, setReviewElements]);
 
   // --- Submit review (per active role) ---
