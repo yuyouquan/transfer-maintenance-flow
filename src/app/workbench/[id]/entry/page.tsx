@@ -134,24 +134,6 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [reviewElements, effectiveRole],
   );
 
-  // --- Delegated items (items from OTHER roles where user is entryPerson/delegated) ---
-
-  const delegatedChecklist = useMemo(() => {
-    const ownRoles = new Set(userResponsibleRoles);
-    return checklistItems.filter((item) =>
-      !ownRoles.has(item.responsibleRole) &&
-      (item.entryPersonId === currentUser.id || item.delegatedTo?.includes(currentUser.id))
-    );
-  }, [checklistItems, userResponsibleRoles, currentUser.id]);
-
-  const delegatedReviewElements = useMemo(() => {
-    const ownRoles = new Set(userResponsibleRoles);
-    return reviewElements.filter((item) =>
-      !ownRoles.has(item.responsibleRole) &&
-      (item.entryPersonId === currentUser.id || item.delegatedTo?.includes(currentUser.id))
-    );
-  }, [reviewElements, userResponsibleRoles, currentUser.id]);
-
   // --- 跨角色被委派给当前用户的项(用于顶部「委派给我的」Collapse) ---
   const delegatedChecklistForMe = useMemo(
     () => checklistItems.filter((i) => i.delegatedTo?.includes(currentUser.id)),
@@ -850,6 +832,60 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         />
       )}
 
+      {/* 委派给我的(跨角色聚合) */}
+      {hasDelegatedItems && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 0, marginBottom: 16 }}>
+          <Collapse
+            defaultActiveKey={['delegated-to-me']}
+            items={[
+              {
+                key: 'delegated-to-me',
+                label: (
+                  <span style={{ fontWeight: 600 }}>
+                    委派给我的 ({delegatedChecklistForMe.length + delegatedReviewElementsForMe.length} 项)
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {delegatedChecklistForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          转维材料 ({delegatedChecklistForMe.length})
+                        </div>
+                        <Table<CheckListItem>
+                          rowKey="id"
+                          columns={checklistColumns}
+                          dataSource={delegatedChecklistForMe as CheckListItem[]}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1600 }}
+                          style={{ marginBottom: 16 }}
+                        />
+                      </>
+                    )}
+                    {delegatedReviewElementsForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          评审要素 ({delegatedReviewElementsForMe.length})
+                        </div>
+                        <Table<ReviewElement>
+                          rowKey="id"
+                          columns={reviewElementColumns}
+                          dataSource={delegatedReviewElementsForMe as ReviewElement[]}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1700 }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
+
       {/* Main card */}
       <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
         {/* Tabs: 转维材料 / 评审要素 */}
@@ -892,46 +928,18 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 </Space>
               ),
               children: (
-                <>
-                  <Table<CheckListItem>
-                    rowKey="id"
-                    columns={checklistColumns}
-                    dataSource={ownRoleChecklist as CheckListItem[]}
-                    pagination={false}
-                    scroll={{ x: 1600 }}
-                    size="middle"
-                    rowSelection={{
-                      selectedRowKeys: selectedChecklistKeys,
-                      onChange: setSelectedChecklistKeys,
-                    }}
-                  />
-                  {/* Delegated checklist items */}
-                  {delegatedChecklist.length > 0 && (
-                    <Collapse
-                      style={{ marginTop: 16 }}
-                      items={[{
-                        key: 'delegated-cl',
-                        label: (
-                          <Space>
-                            <span>委派给我的转维材料</span>
-                            <Tag color="purple">{delegatedChecklist.length}</Tag>
-                            <span style={{ color: '#999', fontSize: 12 }}>（来自其他角色的委派任务，不影响本角色提交审核）</span>
-                          </Space>
-                        ),
-                        children: (
-                          <Table<CheckListItem>
-                            rowKey="id"
-                            columns={checklistColumns}
-                            dataSource={delegatedChecklist as CheckListItem[]}
-                            pagination={false}
-                            scroll={{ x: 1600 }}
-                            size="middle"
-                          />
-                        ),
-                      }]}
-                    />
-                  )}
-                </>
+                <Table<CheckListItem>
+                  rowKey="id"
+                  columns={checklistColumns}
+                  dataSource={ownRoleChecklist as CheckListItem[]}
+                  pagination={false}
+                  scroll={{ x: 1600 }}
+                  size="middle"
+                  rowSelection={{
+                    selectedRowKeys: selectedChecklistKeys,
+                    onChange: setSelectedChecklistKeys,
+                  }}
+                />
               ),
             },
             {
@@ -947,46 +955,18 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 </Space>
               ),
               children: (
-                <>
-                  <Table<ReviewElement>
-                    rowKey="id"
-                    columns={reviewElementColumns}
-                    dataSource={ownRoleReviewElements as ReviewElement[]}
-                    pagination={false}
-                    scroll={{ x: 1700 }}
-                    size="middle"
-                    rowSelection={{
-                      selectedRowKeys: selectedReviewKeys,
-                      onChange: setSelectedReviewKeys,
-                    }}
-                  />
-                  {/* Delegated review elements */}
-                  {delegatedReviewElements.length > 0 && (
-                    <Collapse
-                      style={{ marginTop: 16 }}
-                      items={[{
-                        key: 'delegated-re',
-                        label: (
-                          <Space>
-                            <span>委派给我的评审要素</span>
-                            <Tag color="purple">{delegatedReviewElements.length}</Tag>
-                            <span style={{ color: '#999', fontSize: 12 }}>（来自其他角色的委派任务，不影响本角色提交审核）</span>
-                          </Space>
-                        ),
-                        children: (
-                          <Table<ReviewElement>
-                            rowKey="id"
-                            columns={reviewElementColumns}
-                            dataSource={delegatedReviewElements as ReviewElement[]}
-                            pagination={false}
-                            scroll={{ x: 1700 }}
-                            size="middle"
-                          />
-                        ),
-                      }]}
-                    />
-                  )}
-                </>
+                <Table<ReviewElement>
+                  rowKey="id"
+                  columns={reviewElementColumns}
+                  dataSource={ownRoleReviewElements as ReviewElement[]}
+                  pagination={false}
+                  scroll={{ x: 1700 }}
+                  size="middle"
+                  rowSelection={{
+                    selectedRowKeys: selectedReviewKeys,
+                    onChange: setSelectedReviewKeys,
+                  }}
+                />
               ),
             },
           ]}
