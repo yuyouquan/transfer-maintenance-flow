@@ -134,23 +134,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [reviewElements, effectiveRole],
   );
 
-  // --- Delegated items (items from OTHER roles where user is entryPerson/delegated) ---
+  // --- 跨角色被委派给当前用户的项(用于顶部「委派给我的」Collapse) ---
+  const delegatedChecklistForMe = useMemo(
+    () => checklistItems.filter((i) => i.delegatedTo?.includes(currentUser.id)),
+    [checklistItems, currentUser.id],
+  );
 
-  const delegatedChecklist = useMemo(() => {
-    const ownRoles = new Set(userResponsibleRoles);
-    return checklistItems.filter((item) =>
-      !ownRoles.has(item.responsibleRole) &&
-      (item.entryPersonId === currentUser.id || item.delegatedTo?.includes(currentUser.id))
-    );
-  }, [checklistItems, userResponsibleRoles, currentUser.id]);
+  const delegatedReviewElementsForMe = useMemo(
+    () => reviewElements.filter((i) => i.delegatedTo?.includes(currentUser.id)),
+    [reviewElements, currentUser.id],
+  );
 
-  const delegatedReviewElements = useMemo(() => {
-    const ownRoles = new Set(userResponsibleRoles);
-    return reviewElements.filter((item) =>
-      !ownRoles.has(item.responsibleRole) &&
-      (item.entryPersonId === currentUser.id || item.delegatedTo?.includes(currentUser.id))
-    );
-  }, [reviewElements, userResponsibleRoles, currentUser.id]);
+  const hasDelegatedItems
+    = delegatedChecklistForMe.length > 0 || delegatedReviewElementsForMe.length > 0;
+
+  const canAccessPage = userResponsibleRoles.length > 0 || hasDelegatedItems;
 
   // Block tasks for current role (open only) — driven by context so they update on resolve
   const blockTasks = useMemo(
@@ -178,6 +176,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // Delegate modal - single select, reassign entry person
   const [delegateModalVisible, setDelegateModalVisible] = useState(false);
   const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review' } | null>(null);
+  const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
   // AI check detail modal
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
   const [aiDetailContent, setAiDetailContent] = useState('');
@@ -326,27 +325,40 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   // --- Delegate modal handlers ---
 
-  const openDelegateModal = useCallback((ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
-    setDelegateTarget({ ids, tab });
-    setDelegateModalVisible(true);
-  }, []);
+  const openDelegateModal = useCallback(
+    (ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
+      // 单条委派且该条已有 delegatedTo 时,回填以支持「转委派」展示
+      let current: string | null = null;
+      if (ids.length === 1) {
+        const item = tab === 'checklist'
+          ? checklistItems.find((i) => i.id === ids[0])
+          : reviewElements.find((i) => i.id === ids[0]);
+        current = item?.delegatedTo?.[0] ?? null;
+      }
+      setDelegateTarget({ ids, tab });
+      setDelegateCurrentAssignee(current);
+      setDelegateModalVisible(true);
+    },
+    [checklistItems, reviewElements],
+  );
 
   const handleDelegateConfirm = useCallback((toUserId: string | null) => {
     if (!delegateTarget) return;
 
-    // 录入页不允许「清空委派」(底部按钮 disabled),此处 null 直接忽略以维持类型签名
+    // 录入页传 allowClear={false},DelegateModal 不会回传 null;
+    // 保留这条防御性兜底,行为是直接忽略以维持类型签名。
     if (!toUserId) return;
 
     const targetUser = MOCK_USERS.find((u) => u.id === toUserId);
     if (!targetUser) return;
 
+    const idSet = new Set(delegateTarget.ids);
     const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
-      if (!delegateTarget.ids.includes(item.id)) return item;
+      if (!idSet.has(item.id)) return item;
+      // 单人替换式: delegatedTo 始终为新被委派人;不再修改 entryPerson/entryPersonId
       return {
         ...item,
-        entryPerson: targetUser.name,
-        entryPersonId: targetUser.id,
-        delegatedTo: [...new Set([...(item.delegatedTo ?? []), targetUser.id])],
+        delegatedTo: [targetUser.id],
       };
     };
 
@@ -358,7 +370,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
     setDelegateModalVisible(false);
     setDelegateTarget(null);
-    message.success(`已委派给 ${targetUser.name}，录入责任人已更新`);
+    setDelegateCurrentAssignee(null);
+    message.success(`已委派给 ${targetUser.name}`);
   }, [delegateTarget, setChecklistItems, setReviewElements]);
 
   // --- Submit review (per active role) ---
@@ -486,15 +499,26 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
-      render: (text: string, record: CheckListItem) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
+      render: (text: string, record: CheckListItem) => {
+        const delegatee = record.delegatedTo?.[0];
+        const delegateeName = delegatee
+          ? MOCK_USERS.find((u) => u.id === delegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {delegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                录入委派→{delegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
@@ -557,6 +581,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
+        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
+        const canEdit = isRoleOwner || isDelegatedToMe;
+        if (!canEdit) {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
         return (
           <Space size={4}>
             <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'checklist')}>
@@ -569,7 +599,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps, currentUser.id, userResponsibleRoles]);
 
   // --- Table columns for review elements ---
 
@@ -595,15 +625,26 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
-      render: (text: string, record: ReviewElement) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
+      render: (text: string, record: ReviewElement) => {
+        const delegatee = record.delegatedTo?.[0];
+        const delegateeName = delegatee
+          ? MOCK_USERS.find((u) => u.id === delegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {delegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                录入委派→{delegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
@@ -666,6 +707,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
+        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
+        const canEdit = isRoleOwner || isDelegatedToMe;
+        if (!canEdit) {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
         return (
           <Space size={4}>
             <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'review')}>
@@ -678,7 +725,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps, currentUser.id, userResponsibleRoles]);
 
   // --- Render ---
 
@@ -701,6 +748,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       <div style={{ padding: 40, textAlign: 'center' }}>
         <Alert type="warning" showIcon title={statusText} description="不可再进行资料录入操作" style={{ maxWidth: 560, margin: '0 auto 16px' }} />
         <Button onClick={() => router.push(`/workbench/${id}`)}>返回详情</Button>
+      </div>
+    );
+  }
+
+  if (!canAccessPage) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <Alert
+          type="warning"
+          showIcon
+          title="无权访问"
+          description="您不是当前应用任一资料录入角色的负责人,也无被委派项"
+          style={{ maxWidth: 560, margin: '0 auto 16px' }}
+        />
+        <Button onClick={() => router.push('/workbench')}>返回工作台</Button>
       </div>
     );
   }
@@ -745,7 +807,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* 维护审核驳回提示：默认收起，展开后显示评审意见（一条）+ Block 任务列表（多条） */}
-      {hasRejectedItems && (
+      {userResponsibleRoles.length > 0 && hasRejectedItems && (
         <Collapse
           className="rejection-collapse"
           style={{
@@ -833,49 +895,103 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         />
       )}
 
+      {/* 委派给我的(跨角色聚合) */}
+      {hasDelegatedItems && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 0, marginBottom: 16 }}>
+          <Collapse
+            defaultActiveKey={['delegated-to-me']}
+            items={[
+              {
+                key: 'delegated-to-me',
+                label: (
+                  <span style={{ fontWeight: 600 }}>
+                    委派给我的 ({delegatedChecklistForMe.length + delegatedReviewElementsForMe.length} 项)
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {delegatedChecklistForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          转维材料 ({delegatedChecklistForMe.length})
+                        </div>
+                        <Table<CheckListItem>
+                          rowKey="id"
+                          columns={checklistColumns}
+                          dataSource={delegatedChecklistForMe as CheckListItem[]}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1600 }}
+                          style={{ marginBottom: 16 }}
+                        />
+                      </>
+                    )}
+                    {delegatedReviewElementsForMe.length > 0 && (
+                      <>
+                        <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
+                          评审要素 ({delegatedReviewElementsForMe.length})
+                        </div>
+                        <Table<ReviewElement>
+                          rowKey="id"
+                          columns={reviewElementColumns}
+                          dataSource={delegatedReviewElementsForMe as ReviewElement[]}
+                          pagination={false}
+                          size="small"
+                          scroll={{ x: 1700 }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
+
       {/* Main card */}
-      <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-        {/* Tabs: 转维材料 / 评审要素 */}
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => {
-            setActiveTab(key);
-            setSelectedChecklistKeys([]);
-            setSelectedReviewKeys([]);
-          }}
-          tabBarExtraContent={
-            <Space size={8}>
-              {selectedKeys.length > 0 && (
-                <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], activeTab as 'checklist' | 'review')}>
-                  全部委派 ({selectedKeys.length})
-                </Button>
-              )}
-              {effectiveRole && (
-                <Tooltip title={submitTooltip}>
-                  <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
-                    提交{effectiveRole}审核
+      {userResponsibleRoles.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
+          {/* Tabs: 转维材料 / 评审要素 */}
+          <Tabs
+            activeKey={activeTab}
+            onChange={(key) => {
+              setActiveTab(key);
+              setSelectedChecklistKeys([]);
+              setSelectedReviewKeys([]);
+            }}
+            tabBarExtraContent={
+              <Space size={8}>
+                {selectedKeys.length > 0 && (
+                  <Button size="small" onClick={() => openDelegateModal(selectedKeys as string[], activeTab as 'checklist' | 'review')}>
+                    全部委派 ({selectedKeys.length})
                   </Button>
-                </Tooltip>
-              )}
-              <Button icon={<UploadOutlined />} size="small">导入</Button>
-              <Button icon={<DownloadOutlined />} size="small">导出</Button>
-            </Space>
-          }
-          items={[
-            {
-              key: 'checklist',
-              label: (
-                <Space size={6}>
-                  <span>转维材料 ({ownRoleChecklist.length})</span>
-                  {pendingChecklistCount > 0 && (
-                    <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
-                      <Badge count={pendingChecklistCount} size="small" />
-                    </Tooltip>
-                  )}
-                </Space>
-              ),
-              children: (
-                <>
+                )}
+                {effectiveRole && (
+                  <Tooltip title={submitTooltip}>
+                    <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
+                      提交{effectiveRole}审核
+                    </Button>
+                  </Tooltip>
+                )}
+                <Button icon={<UploadOutlined />} size="small">导入</Button>
+                <Button icon={<DownloadOutlined />} size="small">导出</Button>
+              </Space>
+            }
+            items={[
+              {
+                key: 'checklist',
+                label: (
+                  <Space size={6}>
+                    <span>转维材料 ({ownRoleChecklist.length})</span>
+                    {pendingChecklistCount > 0 && (
+                      <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
+                        <Badge count={pendingChecklistCount} size="small" />
+                      </Tooltip>
+                    )}
+                  </Space>
+                ),
+                children: (
                   <Table<CheckListItem>
                     rowKey="id"
                     columns={checklistColumns}
@@ -888,49 +1004,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                       onChange: setSelectedChecklistKeys,
                     }}
                   />
-                  {/* Delegated checklist items */}
-                  {delegatedChecklist.length > 0 && (
-                    <Collapse
-                      style={{ marginTop: 16 }}
-                      items={[{
-                        key: 'delegated-cl',
-                        label: (
-                          <Space>
-                            <span>委派给我的转维材料</span>
-                            <Tag color="purple">{delegatedChecklist.length}</Tag>
-                            <span style={{ color: '#999', fontSize: 12 }}>（来自其他角色的委派任务，不影响本角色提交审核）</span>
-                          </Space>
-                        ),
-                        children: (
-                          <Table<CheckListItem>
-                            rowKey="id"
-                            columns={checklistColumns}
-                            dataSource={delegatedChecklist as CheckListItem[]}
-                            pagination={false}
-                            scroll={{ x: 1600 }}
-                            size="middle"
-                          />
-                        ),
-                      }]}
-                    />
-                  )}
-                </>
-              ),
-            },
-            {
-              key: 'review',
-              label: (
-                <Space size={6}>
-                  <span>评审要素 ({ownRoleReviewElements.length})</span>
-                  {pendingReviewCount > 0 && (
-                    <Tooltip title={`还有 ${pendingReviewCount} 项未录入或AI检查未通过`}>
-                      <Badge count={pendingReviewCount} size="small" />
-                    </Tooltip>
-                  )}
-                </Space>
-              ),
-              children: (
-                <>
+                ),
+              },
+              {
+                key: 'review',
+                label: (
+                  <Space size={6}>
+                    <span>评审要素 ({ownRoleReviewElements.length})</span>
+                    {pendingReviewCount > 0 && (
+                      <Tooltip title={`还有 ${pendingReviewCount} 项未录入或AI检查未通过`}>
+                        <Badge count={pendingReviewCount} size="small" />
+                      </Tooltip>
+                    )}
+                  </Space>
+                ),
+                children: (
                   <Table<ReviewElement>
                     rowKey="id"
                     columns={reviewElementColumns}
@@ -943,38 +1031,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                       onChange: setSelectedReviewKeys,
                     }}
                   />
-                  {/* Delegated review elements */}
-                  {delegatedReviewElements.length > 0 && (
-                    <Collapse
-                      style={{ marginTop: 16 }}
-                      items={[{
-                        key: 'delegated-re',
-                        label: (
-                          <Space>
-                            <span>委派给我的评审要素</span>
-                            <Tag color="purple">{delegatedReviewElements.length}</Tag>
-                            <span style={{ color: '#999', fontSize: 12 }}>（来自其他角色的委派任务，不影响本角色提交审核）</span>
-                          </Space>
-                        ),
-                        children: (
-                          <Table<ReviewElement>
-                            rowKey="id"
-                            columns={reviewElementColumns}
-                            dataSource={delegatedReviewElements as ReviewElement[]}
-                            pagination={false}
-                            scroll={{ x: 1700 }}
-                            size="middle"
-                          />
-                        ),
-                      }]}
-                    />
-                  )}
-                </>
-              ),
-            },
-          ]}
-        />
-      </div>
+                ),
+              },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Entry Modal */}
       <Modal
@@ -1024,11 +1086,14 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         open={delegateModalVisible}
         title="委派任务"
         selectedCount={delegateTarget?.ids.length ?? 0}
+        currentAssignee={delegateCurrentAssignee}
         excludeUserIds={[currentUser.id]}
+        allowClear={false}
         onConfirm={handleDelegateConfirm}
         onCancel={() => {
           setDelegateModalVisible(false);
           setDelegateTarget(null);
+          setDelegateCurrentAssignee(null);
         }}
       />
 

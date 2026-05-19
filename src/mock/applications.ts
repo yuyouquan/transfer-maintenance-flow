@@ -550,8 +550,8 @@ const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
   26: { entryContent: '确认历史版本已全市场推送\nhttps://feishu.cn/docs/x6870-ota-push-record', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
   27: { entryContent: '测试用例库已交接\nhttps://feishu.cn/docs/x6870-test-cases', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
   // 底软: indices 36-46, 前2条委派给张三(u001)
-  36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
-  37: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
+  36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'] },
+  37: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'] },
   // 系统: indices 47-51, 第1条(47)已录入但AI失败
   47: { entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问', reviewStatus: 'not_reviewed' },
   // 影像: indices 52-59, 前2条(52-53)已录入, 第53条暂存
@@ -564,7 +564,7 @@ const APP001_RE_OVERRIDES: Record<number, ItemOverride> = {
   0: { entryContent: 'IPM系统版本计划与实际上市时间一致，详见附件', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
   // 底软评审要素: indices 5-9, 第1条已录入通过, 第2条委派给张三
   5: { entryContent: 'BSP驱动源码仓库：https://git.internal/bsp/x6870', entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'not_reviewed' },
-  6: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'], entryPersonOverride: { id: 'u001', name: '张三' } },
+  6: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'] },
 };
 
 // ============================================================
@@ -590,8 +590,11 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
   for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 底软 (36-46): all entered+passed, reviewStatus=reviewing
   // index 36: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
+  // index 37/38: 被委派给 u001(张三/SPM)，张三是本 app SPM 责任人,用于测试「自己角色+被委派」并存场景
   for (let i = 36; i <= 46; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   ov[36] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
+  ov[37] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
+  ov[38] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
   // 系统 (47-51): all entered+passed, reviewStatus=passed
   for (let i = 47; i <= 51; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 影像 (52-59): all entered+passed, reviewStatus=passed
@@ -606,8 +609,10 @@ function makeApp002ReOverrides(): Record<number, ItemOverride> {
   ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
   // 底软 (5-9): reviewing
   // index 5: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
+  // index 6: 被委派给 u001(张三/SPM)，张三是本 app SPM 责任人,用于测试「自己角色+被委派」并存场景
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
   ov[5] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
+  ov[6] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
   // 系统 (10-14): passed
   for (let i = 10; i <= 14; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 影像 (15-19): passed

@@ -19,6 +19,8 @@ export interface DelegateModalProps {
   onConfirm: (toUserId: string | null) => void;
   /** 取消回调 */
   onCancel: () => void;
+  /** 是否显示底部「清空委派」按钮(默认 true)。录入场景传 false 屏蔽。 */
+  allowClear?: boolean;
 }
 
 export default function DelegateModal(props: DelegateModalProps) {
@@ -30,6 +32,7 @@ export default function DelegateModal(props: DelegateModalProps) {
     excludeUserIds,
     onConfirm,
     onCancel,
+    allowClear = true,
   } = props;
 
   const [value, setValue] = React.useState<string | undefined>(currentAssignee ?? undefined);
@@ -71,9 +74,13 @@ export default function DelegateModal(props: DelegateModalProps) {
       destroyOnHidden
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Button danger type="text" onClick={handleClear} disabled={!currentAssignee}>
-            清空委派
-          </Button>
+          {allowClear ? (
+            <Button danger type="text" onClick={handleClear} disabled={!currentAssignee}>
+              清空委派
+            </Button>
+          ) : (
+            <span />
+          )}
           <div>
             <Button onClick={onCancel} style={{ marginRight: 8 }}>取消</Button>
             <Button type="primary" onClick={handleOk} disabled={!value}>确认委派</Button>
