@@ -552,6 +552,9 @@ const APP001_CL_OVERRIDES: Record<number, ItemOverride> = {
   // 底软: indices 36-46, 前2条委派给张三(u001)
   36: { entryContent: '散热方案文档整理中\n\\\\192.168.1.100\\projects\\x6870\\thermal', entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'] },
   37: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u001'] },
+  // 测试 index 28: 委派给 u006 孙八(app-001 维护 SPM,非 research 角色)
+  // 用于验证「无角色但有被委派」纯 Collapse 视图
+  28: { entryStatus: 'not_entered', aiCheckStatus: 'not_started', reviewStatus: 'not_reviewed', delegatedTo: ['u006'] },
   // 系统: indices 47-51, 第1条(47)已录入但AI失败
   47: { entryContent: '系统集成配置文档：https://feishu.cn/docs/xxx', entryStatus: 'entered', aiCheckStatus: 'failed', aiCheckResult: '未检测到有效的系统编译配置文档链接，提供的链接无法访问', reviewStatus: 'not_reviewed' },
   // 影像: indices 52-59, 前2条(52-53)已录入, 第53条暂存
