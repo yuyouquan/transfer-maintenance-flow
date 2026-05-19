@@ -176,6 +176,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // Delegate modal - single select, reassign entry person
   const [delegateModalVisible, setDelegateModalVisible] = useState(false);
   const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review' } | null>(null);
+  const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
   // AI check detail modal
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
   const [aiDetailContent, setAiDetailContent] = useState('');
@@ -324,10 +325,22 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   // --- Delegate modal handlers ---
 
-  const openDelegateModal = useCallback((ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
-    setDelegateTarget({ ids, tab });
-    setDelegateModalVisible(true);
-  }, []);
+  const openDelegateModal = useCallback(
+    (ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
+      // 单条委派且该条已有 delegatedTo 时,回填以支持「转委派」展示
+      let current: string | null = null;
+      if (ids.length === 1) {
+        const item = tab === 'checklist'
+          ? checklistItems.find((i) => i.id === ids[0])
+          : reviewElements.find((i) => i.id === ids[0]);
+        current = item?.delegatedTo?.[0] ?? null;
+      }
+      setDelegateTarget({ ids, tab });
+      setDelegateCurrentAssignee(current);
+      setDelegateModalVisible(true);
+    },
+    [checklistItems, reviewElements],
+  );
 
   const handleDelegateConfirm = useCallback((toUserId: string | null) => {
     if (!delegateTarget) return;
@@ -357,6 +370,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
     setDelegateModalVisible(false);
     setDelegateTarget(null);
+    setDelegateCurrentAssignee(null);
     message.success(`已委派给 ${targetUser.name}`);
   }, [delegateTarget, setChecklistItems, setReviewElements]);
 
@@ -567,6 +581,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
+        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
+        const canEdit = isRoleOwner || isDelegatedToMe;
+        if (!canEdit) {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
         return (
           <Space size={4}>
             <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'checklist')}>
@@ -579,7 +599,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps, currentUser.id, userResponsibleRoles]);
 
   // --- Table columns for review elements ---
 
@@ -687,6 +707,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
+        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
+        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
+        const canEdit = isRoleOwner || isDelegatedToMe;
+        if (!canEdit) {
+          return <span style={{ color: '#bfbfbf' }}>-</span>;
+        }
         return (
           <Space size={4}>
             <Button type="link" size="small" onClick={() => openEntryModal(record.id, 'review')}>
@@ -699,7 +725,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps, currentUser.id, userResponsibleRoles]);
 
   // --- Render ---
 
@@ -1043,11 +1069,14 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         open={delegateModalVisible}
         title="委派任务"
         selectedCount={delegateTarget?.ids.length ?? 0}
+        currentAssignee={delegateCurrentAssignee}
         excludeUserIds={[currentUser.id]}
+        allowClear={false}
         onConfirm={handleDelegateConfirm}
         onCancel={() => {
           setDelegateModalVisible(false);
           setDelegateTarget(null);
+          setDelegateCurrentAssignee(null);
         }}
       />
 
