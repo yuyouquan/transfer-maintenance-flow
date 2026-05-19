@@ -485,15 +485,26 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
-      render: (text: string, record: CheckListItem) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
+      render: (text: string, record: CheckListItem) => {
+        const delegatee = record.delegatedTo?.[0];
+        const delegateeName = delegatee
+          ? MOCK_USERS.find((u) => u.id === delegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {delegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                录入委派→{delegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
@@ -594,15 +605,26 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
     },
     {
-      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 130, align: 'center',
-      render: (text: string, record: ReviewElement) => (
-        <Space size={4}>
-          <span>{text}</span>
-          {record.delegatedTo && record.delegatedTo.length > 0 && (
-            <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
-          )}
-        </Space>
-      ),
+      title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
+      render: (text: string, record: ReviewElement) => {
+        const delegatee = record.delegatedTo?.[0];
+        const delegateeName = delegatee
+          ? MOCK_USERS.find((u) => u.id === delegatee)?.name
+          : null;
+        return (
+          <Space size={4} wrap>
+            <span>{text}</span>
+            {record.delegatedTo && record.delegatedTo.length > 0 && (
+              <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+            )}
+            {delegateeName && (
+              <Tag color="blue" style={{ fontSize: 11, marginRight: 0 }}>
+                录入委派→{delegateeName}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 110, align: 'center',
