@@ -152,6 +152,22 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }, [reviewElements, userResponsibleRoles, currentUser.id]);
 
+  // --- 跨角色被委派给当前用户的项(用于顶部「委派给我的」Collapse) ---
+  const delegatedChecklistForMe = useMemo(
+    () => checklistItems.filter((i) => i.delegatedTo?.includes(currentUser.id)),
+    [checklistItems, currentUser.id],
+  );
+
+  const delegatedReviewElementsForMe = useMemo(
+    () => reviewElements.filter((i) => i.delegatedTo?.includes(currentUser.id)),
+    [reviewElements, currentUser.id],
+  );
+
+  const hasDelegatedItems
+    = delegatedChecklistForMe.length > 0 || delegatedReviewElementsForMe.length > 0;
+
+  const canAccessPage = userResponsibleRoles.length > 0 || hasDelegatedItems;
+
   // Block tasks for current role (open only) — driven by context so they update on resolve
   const blockTasks = useMemo(
     () => allCtxBlockTasks.filter(
