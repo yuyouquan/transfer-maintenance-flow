@@ -8,7 +8,6 @@ import {
   Input,
   Select,
   Upload,
-  Tooltip,
   Tag,
   message,
   Space,
@@ -21,11 +20,13 @@ import {
   DiffOutlined,
   SearchOutlined,
   UploadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { MOCK_CHECKLIST_TEMPLATES } from '@/mock';
 import type { CheckListTemplate } from '@/types';
 import { VersionCompareModal, type CompareRow } from '@/components/config/VersionCompareModal';
+import { LongTextCell } from '@/components/shared/LongTextCell';
 
 // --- Mock version data ---
 
@@ -108,10 +109,6 @@ const DIFF_FIELDS = [
   { key: 'aiCheckRule', title: '智能检查规则', width: 380 },
 ];
 
-// --- Constants ---
-
-const AI_RULE_TRUNCATE_LENGTH = 20;
-
 // --- Component ---
 
 export default function ChecklistConfigPage() {
@@ -170,7 +167,10 @@ export default function ChecklistConfigPage() {
         title: '评审要素',
         dataIndex: 'checkItem',
         key: 'checkItem',
-        ellipsis: true,
+        width: 300,
+        render: (checkItem: string) => (
+          <LongTextCell text={checkItem} />
+        ),
       },
       {
         title: '责任角色',
@@ -195,17 +195,10 @@ export default function ChecklistConfigPage() {
         title: '智能检查规则',
         dataIndex: 'aiCheckRule',
         key: 'aiCheckRule',
-        width: 200,
-        render: (rule: string) => {
-          if (rule.length <= AI_RULE_TRUNCATE_LENGTH) {
-            return rule;
-          }
-          return (
-            <Tooltip title={rule}>
-              <span>{rule.slice(0, AI_RULE_TRUNCATE_LENGTH)}...</span>
-            </Tooltip>
-          );
-        },
+        width: 320,
+        render: (aiCheckRule: string) => (
+          <LongTextCell text={aiCheckRule} />
+        ),
       },
     ],
     []
@@ -237,7 +230,7 @@ export default function ChecklistConfigPage() {
       <Card
         title="转维材料配置"
         extra={
-          <Space>
+          <Space wrap>
             <Upload
               accept=".xlsx,.xls"
               showUploadList={false}
@@ -248,6 +241,13 @@ export default function ChecklistConfigPage() {
             >
               <Button icon={<UploadOutlined />}>导入</Button>
             </Upload>
+            <Button
+              icon={<DownloadOutlined />}
+              href="/templates/checklist-import-template.xls"
+              download="转维材料配置导入模板.xls"
+            >
+              下载导入模板
+            </Button>
             <Button icon={<ExportOutlined />} onClick={handleExport}>
               导出
             </Button>
