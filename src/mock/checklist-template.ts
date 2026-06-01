@@ -9,8 +9,37 @@ export const MOCK_CHECKLIST_TEMPLATES: ReadonlyArray<CheckListTemplate> = [
   { id: 'cl-001', type: '检查项', checkItem: 'IPM/SPUG项目信息完整无误、版本流程全部走完', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '通过IPM系统获取项目的所有版本计划的上市时间小于当前时间' },
   { id: 'cl-002', type: '检查项', checkItem: 'Super空间大小：规划N代升级预留N/GB大小', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '检查文本是否为描述当前项目的Super空间剩余大小' },
   { id: 'cl-003', type: '检查项', checkItem: '项目计划已文控归档（交接时提供截图）', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '如果是飞书链接，则检查飞书表格或者文档内容是否包含项目计划表；如果是截图，则提取图中内容，检查是否包含项目计划表' },
-  { id: 'cl-004', type: '检查项', checkItem: '交接时，所有市场项目最新归档版本的GMS包需要与市场项目的最新配置保持一致', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '检查文本描述符合评审要素即可' },
-  { id: 'cl-005', type: '检查项', checkItem: 'Jenkins编译界面所有参数需更新到准确', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '确认给出的文本里包含Jenkins链接即可' },
+  { id: 'cl-004', type: '检查项', checkItem: '交接时，所有市场项目（Product）最新归档版本的GMS包需要与市场项目的最新配置保持一致', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '检查文本描述符合评审要素即可，需考虑多种表达方式，其一，直接填写"确认OK"这种也是符合的，其二，填写的是GMS包归档的NAS目录以及市场项目的版本号，这种如果能检查到NAS目录下最新版本号与填写的市场版本号一致则也是通过的，如果无法读取NAS目录，则只给出文本逻辑检查结果' },
+  {
+    id: 'cl-005',
+    type: '交接资料',
+    checkItem: '《XX项目-硬件报告归档路径》\n《XX项目-软件报告归档路径》',
+    responsibleRole: '测试',
+    entryRole: '在研TPM',
+    reviewRole: '维护TPM',
+    aiCheckRule: `1）输入形态与可追溯性（通用）
+通过：该项录入内容满足其一即可
+飞书文档/表格/云盘链接；或NAS/共享盘目录路径；或上传附件文件名（xls/xlsx/pdf/doc/docx/ppt/pptx/jpg/png/zip等）。
+允许“一个汇总文档覆盖多项”（如“项目信息汇总表/硬测转维交接材料checklist”）：若可读取内容，则需能检索到对应条目/章节；不可读取时按“低置信通过”但提示补充定位（页码/章节/表格sheet名）。
+链接校验（能访问时必须做）：文档/云盘资源真实存在、可打开；打不开/不存在 ⇒ 不通过/需补充。
+路径校验（NAS类）：UNC 格式优先（如 \\\\10.x.x.x\\...），且路径中能定位到“项目名/代号 + 资料类型关键词（见第2点）”；无法定位仅给根目录 ⇒ 需补充。
+2）材料匹配性（通用）
+标题/文件名/路径命中关键词即可判“匹配通过”：
+默认规则：从该检查项名称中抽取核心词（如“版本开放记录/必解问题/风险评估/SMRD/状态表/出货国家/关键器件/PCBA/SPD/功耗评估/温升方案/GPIO/驱动/性能测试/归档路径”等），在用户填写文本或链接标题中出现即可。
+若可读取文档内容：优先检查文档内出现相同关键词或存在对应表头字段（如“版本/日期/结论/责任人/状态/风险/国家/器件/料号/供应商/配置”等）以提升置信度。
+3）允许“文本结论”直接判定的特殊项（按历史案例）
+《功耗大数据不达标澄清报告》：
+文本出现“达标/已达标/结论达标” ⇒ 通过；
+若文本出现“不达标/未达标”但未给澄清报告链接/路径 ⇒ 不通过（需补澄清材料）。
+《NPS调研任务分解报告》：
+文本出现“NA/暂无/未回/计划X月提供/在研拆解中/参考某汇总表链接”等，并说明原因或给参考链接 ⇒ 结论 NA；
+仅写“NA/暂无”无原因/无参考入口 ⇒ NA（低置信，建议补原因）。
+《性能测试模型指标差距分析报告》：
+备注/文本出现“性能暂时不转维/该项不转维” ⇒ 结论 NA；否则按通用规则需提供链接/路径/附件。
+《多供导入计划》：
+文本出现“后续暂无多供导入计划/无多供导入” ⇒ 通过（视为不涉及）；
+若项目存在多供但填“无/暂无”且无解释 ⇒ 需补充说明。`,
+  },
   { id: 'cl-006', type: '检查项', checkItem: '项目资料在固定服务器完成归档', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '检查文本里包含归档的飞书文档链接或NAS目录链接即可' },
   { id: 'cl-007', type: '检查项', checkItem: '项目客制化需求必须在SPD中有记录', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '如提供了SPD链接则检查SPD文档真实存在即可' },
   { id: 'cl-008', type: '检查项', checkItem: '确认OTA首版到最新量升版本中间无断开', responsibleRole: 'SPM', entryRole: '在研SPM', reviewRole: '维护SPM', aiCheckRule: '检查OTA部署表文档真实存在即可' },

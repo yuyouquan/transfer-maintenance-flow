@@ -8,7 +8,6 @@ import {
   Input,
   Select,
   Upload,
-  Tooltip,
   Tag,
   message,
   Space,
@@ -21,11 +20,13 @@ import {
   DiffOutlined,
   SearchOutlined,
   UploadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { MOCK_REVIEW_ELEMENT_TEMPLATES } from '@/mock';
 import type { ReviewElementTemplate } from '@/types';
 import { VersionCompareModal, type CompareRow } from '@/components/config/VersionCompareModal';
+import { LongTextCell } from '@/components/shared/LongTextCell';
 
 // --- Mock version data ---
 
@@ -109,10 +110,6 @@ const DIFF_FIELDS = [
   { key: 'aiCheckRule', title: '智能检查规则', width: 320 },
 ];
 
-// --- Constants ---
-
-const AI_RULE_TRUNCATE_LENGTH = 20;
-
 // --- Component ---
 
 export default function ReviewElementsConfigPage() {
@@ -172,14 +169,19 @@ export default function ReviewElementsConfigPage() {
         title: '说明',
         dataIndex: 'description',
         key: 'description',
-        ellipsis: true,
+        width: 300,
+        render: (description: string) => (
+          <LongTextCell text={description} />
+        ),
       },
       {
         title: '备注',
         dataIndex: 'remark',
         key: 'remark',
-        width: 200,
-        ellipsis: true,
+        width: 240,
+        render: (remark: string) => (
+          <LongTextCell text={remark} />
+        ),
       },
       {
         title: '责任角色',
@@ -204,17 +206,10 @@ export default function ReviewElementsConfigPage() {
         title: '智能检查规则',
         dataIndex: 'aiCheckRule',
         key: 'aiCheckRule',
-        width: 200,
-        render: (rule: string) => {
-          if (rule.length <= AI_RULE_TRUNCATE_LENGTH) {
-            return rule;
-          }
-          return (
-            <Tooltip title={rule}>
-              <span>{rule.slice(0, AI_RULE_TRUNCATE_LENGTH)}...</span>
-            </Tooltip>
-          );
-        },
+        width: 320,
+        render: (aiCheckRule: string) => (
+          <LongTextCell text={aiCheckRule} />
+        ),
       },
     ],
     []
@@ -246,7 +241,7 @@ export default function ReviewElementsConfigPage() {
       <Card
         title="评审要素配置"
         extra={
-          <Space>
+          <Space wrap>
             <Upload
               accept=".xlsx,.xls"
               showUploadList={false}
@@ -257,6 +252,13 @@ export default function ReviewElementsConfigPage() {
             >
               <Button icon={<UploadOutlined />}>导入</Button>
             </Upload>
+            <Button
+              icon={<DownloadOutlined />}
+              href="/templates/review-elements-import-template.xls"
+              download="评审要素配置导入模板.xls"
+            >
+              下载导入模板
+            </Button>
             <Button icon={<ExportOutlined />} onClick={handleExport}>
               导出
             </Button>
