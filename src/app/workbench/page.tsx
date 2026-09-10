@@ -393,7 +393,7 @@ export default function WorkbenchPage() {
                 {text}
               </div>
               <div style={{ fontSize: 11, color: '#999' }}>
-                {record.applicant} · {new Date(record.updatedAt).toLocaleDateString('zh-CN')}
+                {record.applicant} · {new Date(record.updatedAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })}
               </div>
             </div>
           </div>
