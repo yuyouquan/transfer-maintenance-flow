@@ -173,7 +173,6 @@ const TEAM_APP001 = {
   research: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -191,7 +190,6 @@ const TEAM_APP002 = {
   research: [
     { id: 'u010', name: '冯十二', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u011', name: '陈十三', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -209,7 +207,6 @@ const TEAM_APP003 = {
   research: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -227,7 +224,6 @@ const TEAM_APP004 = {
   research: [
     { id: 'u010', name: '冯十二', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u011', name: '陈十三', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -246,7 +242,6 @@ const TEAM_APP005 = {
   research: [
     { id: 'u001', name: '张三', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软' as const, department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -267,7 +262,6 @@ const TEAM_APP007 = {
   research: [
     { id: 'u010', name: '冯十二', role: 'SPM' as const, department: '项目管理部' },
     { id: 'u011', name: '陈十三', role: 'TPM' as const, department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA' as const, department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软' as const, department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统' as const, department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像' as const, department: '影像开发部' },
@@ -296,7 +290,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
@@ -323,7 +317,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'in_progress',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'rejected' },
@@ -351,7 +345,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'not_started',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },
@@ -378,7 +372,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'success',
-      sqaReview: 'success',
+      maintenanceSpmReview: 'success',
       infoChange: 'success',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' },
@@ -413,7 +407,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'not_started' },
@@ -448,7 +442,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
@@ -483,7 +477,7 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'not_started' },
@@ -497,8 +491,8 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     updatedAt: '2026-03-15T14:00:00Z',
   },
   // ============================================================
-  // app-008: X7400 — 所有角色审核通过，SQA审核进行中
-  // 用于测试SQA审核流程
+  // app-008: X7400 — 所有角色审核通过，维护SPM审核进行中
+  // 用于测试维护SPM审核流程
   // ============================================================
   {
     id: 'app-008',
@@ -508,13 +502,13 @@ export const MOCK_APPLICATIONS: TransferApplication[] = [
     applicantId: 'u001',
     team: TEAM_APP005,
     plannedReviewDate: '2026-04-25',
-    remark: 'X7400项目维护审核已全部通过，进入SQA审核阶段',
+    remark: 'X7400项目维护审核已全部通过，进入维护SPM审核阶段',
     status: 'in_progress',
     pipeline: {
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'success',
-      sqaReview: 'in_progress',
+      maintenanceSpmReview: 'in_progress',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' },
@@ -592,10 +586,10 @@ function makeApp002ClOverrides(): Record<number, ItemOverride> {
   // 测试 (25-35): all entered+passed, reviewStatus=passed
   for (let i = 25; i <= 35; i++) ov[i] = ENTERED_PASSED_REVIEWED;
   // 底软 (36-46): all entered+passed, reviewStatus=reviewing
-  // index 36: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
+  // index 36: 被委派给 u007(周九/TPM)，周九不在 app-002 维护团队，用于测试「委派给我的」Collapse
   // index 37/38: 被委派给 u001(张三/SPM)，张三是本 app SPM 责任人,用于测试「自己角色+被委派」并存场景
   for (let i = 36; i <= 46; i++) ov[i] = ENTERED_PASSED_REVIEWING;
-  ov[36] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
+  ov[36] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u007'] };
   ov[37] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
   ov[38] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
   // 系统 (47-51): all entered+passed, reviewStatus=passed
@@ -611,10 +605,10 @@ function makeApp002ReOverrides(): Record<number, ItemOverride> {
   for (let i = 0; i <= 4; i++) ov[i] = ENTERED_PASSED;
   ov[1] = { ...ENTERED_PASSED_REJECTED, reviewComment: APP002_SPM_REVIEW_COMMENT };
   // 底软 (5-9): reviewing
-  // index 5: 被委派给 u003(王五/SQA)，王五不在 app-002 维护团队，用于测试「委派给我的」Collapse
+  // index 5: 被委派给 u007(周九/TPM)，周九不在 app-002 维护团队，用于测试「委派给我的」Collapse
   // index 6: 被委派给 u001(张三/SPM)，张三是本 app SPM 责任人,用于测试「自己角色+被委派」并存场景
   for (let i = 5; i <= 9; i++) ov[i] = ENTERED_PASSED_REVIEWING;
-  ov[5] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u003'] };
+  ov[5] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u007'] };
   ov[6] = { ...ENTERED_PASSED_REVIEWING, reviewDelegatedTo: ['u001'] };
   // 系统 (10-14): passed
   for (let i = 10; i <= 14; i++) ov[i] = ENTERED_PASSED_REVIEWED;
@@ -817,7 +811,7 @@ export const MOCK_LEGACY_TASKS: LegacyTask[] = [
 // - 创建转维申请
 // - {角色} 资料录入与AI检查完毕（提交审核时）
 // - {角色} 维护审核通过 / {角色} 维护审核被拒绝
-// - SQA审核通过 / SQA关闭流水线
+// - 维护SPM审核通过 / 维护SPM关闭流水线
 // - 申请已取消（项目级关闭）
 export const MOCK_HISTORY: HistoryRecord[] = [
   // app-001: dataEntry 进行中，尚未有角色完成提交
@@ -839,7 +833,7 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h201', applicationId: 'app-003', action: '创建转维申请', operator: '张三', detail: '创建了 X6980_H9012(Android17) 的转维申请', timestamp: '2026-03-05T14:00:00Z' },
   { id: 'h202', applicationId: 'app-003', action: '申请已取消', operator: '张三', detail: '取消原因：项目计划变更，暂缓转维', timestamp: '2026-03-08T10:00:00Z' },
 
-  // app-004: 全流程完成（含 SQA 通过）
+  // app-004: 全流程完成（含 维护SPM 通过）
   { id: 'h301', applicationId: 'app-004', action: '创建转维申请', operator: '冯十二', detail: '创建了 X6650_H3456(Android14) 的转维申请', timestamp: '2026-01-15T09:00:00Z' },
   { id: 'h302', applicationId: 'app-004', action: 'SPM 资料录入与AI检查完毕', operator: '冯十二', detail: 'SPM 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-08T10:00:00Z' },
   { id: 'h303', applicationId: 'app-004', action: '测试 资料录入与AI检查完毕', operator: '陈十三', detail: '测试 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-02-09T11:00:00Z' },
@@ -851,14 +845,14 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h309', applicationId: 'app-004', action: '底软 维护审核通过', operator: '赵六', detail: '底软 角色维护审核全部通过', timestamp: '2026-02-20T09:00:00Z' },
   { id: 'h310', applicationId: 'app-004', action: '系统 维护审核通过', operator: '钱七', detail: '系统 角色维护审核全部通过', timestamp: '2026-02-22T15:00:00Z' },
   { id: 'h311', applicationId: 'app-004', action: '影像 维护审核通过', operator: '沈十七', detail: '影像 角色维护审核全部通过', timestamp: '2026-02-24T11:00:00Z' },
-  { id: 'h312', applicationId: 'app-004', action: 'SQA 审核通过', operator: '王五', detail: 'SQA 审核全部通过，转维流程完成', timestamp: '2026-02-28T10:00:00Z' },
+  { id: 'h312', applicationId: 'app-004', action: '维护SPM审核通过', operator: '张三', detail: '维护SPM审核全部通过，转维流程完成', timestamp: '2026-02-28T10:00:00Z' },
 
   // app-005/006/007: 进入资料录入阶段，尚无角色完成提交（SPM/底软/系统等虽已 entered+passed，但 reviewStatus 仍为 not_started，未点击提交审核）
   { id: 'h401', applicationId: 'app-005', action: '创建转维申请', operator: '张三', detail: '创建了 X7100_H4567(Android17) 的转维申请', timestamp: '2026-03-01T09:00:00Z' },
   { id: 'h501', applicationId: 'app-006', action: '创建转维申请', operator: '张三', detail: '创建了 X7200_H7890(Android16) 的转维申请', timestamp: '2026-02-25T10:00:00Z' },
   { id: 'h601', applicationId: 'app-007', action: '创建转维申请', operator: '冯十二', detail: '创建了 X7300_H2345(Android15) 的转维申请', timestamp: '2026-03-05T08:00:00Z' },
 
-  // app-008: 5 角色资料录入完毕 + 5 角色维护审核通过；SQA 审核进行中（未出 SQA 终态事件）
+  // app-008: 5 角色资料录入完毕 + 5 角色维护审核通过；维护SPM审核进行中（未出 维护SPM 终态事件）
   { id: 'h701', applicationId: 'app-008', action: '创建转维申请', operator: '张三', detail: '创建了 X7400_H6789(Android16) 的转维申请', timestamp: '2026-02-10T09:00:00Z' },
   { id: 'h702', applicationId: 'app-008', action: 'SPM 资料录入与AI检查完毕', operator: '张三', detail: 'SPM 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-01T10:00:00Z' },
   { id: 'h703', applicationId: 'app-008', action: '测试 资料录入与AI检查完毕', operator: '李四', detail: '测试 角色资料全部录入并通过 AI 检查，已提交维护审核', timestamp: '2026-03-02T11:00:00Z' },
@@ -886,8 +880,8 @@ export const MOCK_TODOS: TodoItem[] = [
   // === app-002: 维护审核进行中 (TEAM_APP002 维护侧) ===
   // 赵六：底软审核中(reviewing)
   { id: 'todo-006', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: '维护审核', responsiblePerson: '赵六', type: 'review' },
-  // 王五(SQA)：SPM角色审核被拒绝，需SQA介入处理
-  { id: 'todo-007', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: 'SQA审核', responsiblePerson: '王五', type: 'sqa_review' },
+  // 张三(维护SPM)：SPM角色审核被拒绝，需维护SPM介入处理
+  { id: 'todo-007', applicationId: 'app-002', projectName: 'X6768_H5678(Android15)', node: '维护SPM审核', responsiblePerson: '张三', type: 'maintenance_spm_review' },
   // === app-005: 资料录入进行中，SPM已完成，其余角色继续 (TEAM_APP005 研发侧) ===
   { id: 'todo-008', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '李四', type: 'entry' },
   { id: 'todo-009', applicationId: 'app-005', projectName: 'X7100_H4567(Android17)', node: '资料录入与AI检查', responsiblePerson: '赵六', type: 'entry' },
@@ -901,6 +895,6 @@ export const MOCK_TODOS: TodoItem[] = [
   { id: 'todo-015', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '陈十三', type: 'entry' },
   { id: 'todo-016', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '卫十五', type: 'entry' },
   { id: 'todo-017', applicationId: 'app-007', projectName: 'X7300_H2345(Android15)', node: '资料录入与AI检查', responsiblePerson: '蒋十六', type: 'entry' },
-  // === app-008: SQA审核进行中 ===
-  { id: 'todo-018', applicationId: 'app-008', projectName: 'X7400_H6789(Android16)', node: 'SQA审核', responsiblePerson: '王五', type: 'sqa_review' },
+  // === app-008: 维护SPM审核进行中 ===
+  { id: 'todo-018', applicationId: 'app-008', projectName: 'X7400_H6789(Android16)', node: '维护SPM审核', responsiblePerson: '孙八', type: 'maintenance_spm_review' },
 ];

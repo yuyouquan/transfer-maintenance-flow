@@ -226,16 +226,16 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
         ? 'success' as const
         : anyReviewStarted ? 'in_progress' as const : app.pipeline.maintenanceReview;
 
-      // Auto-transition: when maintenanceReview becomes success, start sqaReview
-      const newSqaReview = (newMaintenanceReview === 'success' && app.pipeline.sqaReview === 'not_started')
+      // Auto-transition: when maintenanceReview becomes success, start maintenanceSpmReview
+      const newMaintenanceSpmReview = (newMaintenanceReview === 'success' && app.pipeline.maintenanceSpmReview === 'not_started')
         ? 'in_progress' as const
-        : app.pipeline.sqaReview;
+        : app.pipeline.maintenanceSpmReview;
 
       // Check if anything actually changed
       const changed = newRoleProgress.some((rp, idx) => {
         const old = app.pipeline.roleProgress[idx];
         return !old || old.entryStatus !== rp.entryStatus || old.reviewStatus !== rp.reviewStatus;
-      }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview || app.pipeline.sqaReview !== newSqaReview;
+      }) || app.pipeline.dataEntry !== newDataEntry || app.pipeline.maintenanceReview !== newMaintenanceReview || app.pipeline.maintenanceSpmReview !== newMaintenanceSpmReview;
 
       if (!changed) return app;
 
@@ -246,7 +246,7 @@ export function ApplicationProvider({ children }: { readonly children: React.Rea
           roleProgress: newRoleProgress,
           dataEntry: newDataEntry,
           maintenanceReview: newMaintenanceReview,
-          sqaReview: newSqaReview,
+          maintenanceSpmReview: newMaintenanceSpmReview,
         },
       };
     }),

@@ -144,7 +144,7 @@ const ROLE_SORT_ORDER: Record<string, number> = {
 };
 
 const sortTeamMembers = (members: ReadonlyArray<TeamMember>): ReadonlyArray<TeamMember> =>
-  [...members].sort((a, b) => (ROLE_SORT_ORDER[a.role] ?? 9) - (ROLE_SORT_ORDER[b.role] ?? 9));
+  members.filter((member) => member.role !== 'SQA').sort((a, b) => (ROLE_SORT_ORDER[a.role] ?? 9) - (ROLE_SORT_ORDER[b.role] ?? 9));
 
 const ROLE_AVATAR_COLOR: Record<string, string> = {
   SPM: '#1677ff',
@@ -686,18 +686,18 @@ export default function ApplicationDetailPage({
         />
       )}
 
-      {/* SQA 驳回失败横幅 */}
+      {/* 维护SPM 驳回失败横幅 */}
       {application.status === 'failed' && (() => {
         const isProjectSPM = application.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
         const isAdmin = currentUser.isAdmin === true;
         const canReopen = !application.reopenedAsId && (isProjectSPM || isAdmin);
         return (
           <Alert
-            title="SQA 审核未通过，转维流程已终止"
+            title="维护SPM审核未通过，转维流程已终止"
             description={
               <div>
                 <div style={{ marginBottom: 6 }}>
-                  SQA 评审意见：{application.failureReason ?? '（未填写）'}
+                  维护SPM评审意见：{application.failureReason ?? '（未填写）'}
                 </div>
                 {application.reopenedAsId ? (
                   <div style={{ color: '#666', fontSize: 13 }}>
