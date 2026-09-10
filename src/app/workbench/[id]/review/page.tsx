@@ -21,6 +21,7 @@ import { useCurrentUser } from '@/context/UserContext';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
 import DelegateModal from '@/components/shared/DelegateModal';
+import { LongTextCell } from '@/components/shared/LongTextCell';
 
 // Map team role to checklist responsibleRole
 const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
@@ -70,6 +71,14 @@ interface LegacyTaskForm {
   department: string;
   description: string;
   deadline: string;
+}
+
+interface PendingItemReview {
+  readonly ids: ReadonlyArray<string>;
+  readonly type: 'checklist' | 'review_element';
+  readonly status: 'passed' | 'rejected';
+  readonly operatorId: string;
+  readonly isBatch: boolean;
 }
 
 export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -165,6 +174,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTab, setActiveTab] = useState('checklist');
+  const [pendingItemReview, setPendingItemReview] = useState<PendingItemReview | null>(null);
+  const [itemReviewRemark, setItemReviewRemark] = useState('');
 
   // Delegate modal
   const [delegateModalOpen, setDelegateModalOpen] = useState(false);
@@ -198,41 +209,58 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   // --- Single item review ---
   // 行内通过/拒绝只影响该条;整角色重审走顶部「不通过」按钮(applyRoleReviewStatus)
-  const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: ReviewStatus) => {
-    if (type === 'checklist') {
-      setAllChecklistItems((prev) =>
-        prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
-      );
-    } else {
-      setAllReviewElements((prev) =>
-        prev.map((item) => item.id === itemId ? { ...item, reviewStatus: newStatus } : item)
-      );
-    }
-
-    message.success(newStatus === 'passed' ? '已通过' : '已标记为不通过');
-  }, [setAllChecklistItems, setAllReviewElements]);
+  const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: 'passed' | 'rejected') => {
+    setItemReviewRemark('');
+    setPendingItemReview({ ids: [itemId], type, status: newStatus, operatorId: currentUser.id, isBatch: false });
+  }, [currentUser.id]);
 
   // --- Batch review ---
-  const handleBatchReview = useCallback((newStatus: ReviewStatus) => {
-    const selectedSet = new Set(selectedRowKeys.map(String));
+  const handleBatchReview = useCallback((newStatus: 'passed' | 'rejected') => {
+    if (selectedRowKeys.length === 0) return;
+    setItemReviewRemark('');
+    setPendingItemReview({
+      ids: selectedRowKeys.map(String),
+      type: activeTab === 'checklist' ? 'checklist' : 'review_element',
+      status: newStatus,
+      operatorId: currentUser.id,
+      isBatch: true,
+    });
+  }, [activeTab, selectedRowKeys, currentUser.id]);
 
-    if (activeTab === 'checklist') {
-      setAllChecklistItems((prev) =>
-        prev.map((item) =>
-          selectedSet.has(item.id) ? { ...item, reviewStatus: newStatus } : item
-        )
+  const handleItemReviewConfirm = useCallback(() => {
+    if (!pendingItemReview) return;
+    const { ids, type, status, operatorId, isBatch } = pendingItemReview;
+    const items = type === 'checklist' ? allChecklistItems : allReviewElements;
+    const canReviewAll = ids.every((itemId) => {
+      const item = items.find((candidate) => candidate.id === itemId);
+      return item && (
+        item.responsibleRole === userResponsibleRole
+        || item.reviewDelegatedTo?.includes(currentUser.id)
       );
-    } else {
-      setAllReviewElements((prev) =>
-        prev.map((item) =>
-          selectedSet.has(item.id) ? { ...item, reviewStatus: newStatus } : item
-        )
-      );
+    });
+    if (operatorId !== currentUser.id || application?.status !== 'in_progress' || !canReviewAll) {
+      message.warning('审核记录或当前用户已变更，请重新选择记录');
+      setPendingItemReview(null);
+      setItemReviewRemark('');
+      return;
     }
 
-    setSelectedRowKeys([]);
-    message.success(`批量${newStatus === 'passed' ? '通过' : '不通过'} ${selectedRowKeys.length} 条记录`);
-  }, [activeTab, selectedRowKeys, setAllChecklistItems, setAllReviewElements]);
+    const selectedSet = new Set(ids);
+    const reviewRemark = itemReviewRemark.trim();
+    const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => (
+      selectedSet.has(item.id) ? { ...item, reviewStatus: status, reviewRemark } : item
+    );
+    if (type === 'checklist') {
+      setAllChecklistItems((prev) => prev.map(updateItem));
+    } else {
+      setAllReviewElements((prev) => prev.map(updateItem));
+    }
+    if (isBatch) setSelectedRowKeys([]);
+    setPendingItemReview(null);
+    setItemReviewRemark('');
+    message.success(`${isBatch ? '批量' : ''}${status === 'passed' ? '通过' : '不通过'} ${ids.length} 条记录`);
+  }, [pendingItemReview, itemReviewRemark, allChecklistItems, allReviewElements, userResponsibleRole,
+    currentUser.id, application?.status, setAllChecklistItems, setAllReviewElements]);
 
   const openDelegateModal = useCallback(
     (ids: ReadonlyArray<string>, tab: 'checklist' | 'review_element') => {
@@ -391,7 +419,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   // --- User options for selectors ---
   const userOptions = useMemo(
-    () => MOCK_USERS.map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id })),
+    () => MOCK_USERS.filter((u) => u.role !== 'SQA').map((u) => ({ label: `${u.name} (${u.role} - ${u.department})`, value: u.id })),
     [],
   );
 
@@ -426,7 +454,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   if (application.status !== 'in_progress') {
     const statusText = application.status === 'failed'
-      ? 'SQA 审核未通过，流程已终止'
+      ? '维护SPM审核未通过，流程已终止'
       : application.status === 'cancelled'
         ? '该转维申请已取消'
         : '该转维申请已完成';
@@ -517,6 +545,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
+      title: '备注', dataIndex: 'reviewRemark', key: 'reviewRemark', width: 220,
+      render: (text?: string) => <LongTextCell text={text} />,
+    },
+    {
       title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: CheckListItem) => {
         const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
@@ -562,7 +594,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       ...getReSearchProps('description'),
     },
     {
-      title: '备注', dataIndex: 'remark', key: 'remark', width: 140,
+      title: '模板备注', dataIndex: 'remark', key: 'remark', width: 140,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
     },
@@ -629,6 +661,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       },
     },
     {
+      title: '备注', dataIndex: 'reviewRemark', key: 'reviewRemark', width: 220,
+      render: (text?: string) => <LongTextCell text={text} />,
+    },
+    {
       title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: ReviewElement) => {
         const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
@@ -666,6 +702,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const rowSelection = {
     selectedRowKeys,
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+    getCheckboxProps: (record: CheckListItem | ReviewElement) => ({
+      disabled: record.responsibleRole !== userResponsibleRole
+        && !record.reviewDelegatedTo?.includes(currentUser.id),
+    }),
   };
 
   return (
@@ -770,7 +810,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                           dataSource={delegatedChecklistForMe}
                           pagination={false}
                           size="small"
-                          scroll={{ x: 1600 }}
+                          scroll={{ x: 1820 }}
                           style={{ marginBottom: 16 }}
                         />
                       </>
@@ -786,7 +826,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                           dataSource={delegatedReviewElementsForMe}
                           pagination={false}
                           size="small"
-                          scroll={{ x: 1700 }}
+                          scroll={{ x: 1920 }}
                         />
                       </>
                     )}
@@ -814,7 +854,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                     columns={checklistColumns}
                     dataSource={checklistItems}
                     rowSelection={rowSelection}
-                    scroll={{ x: 1600 }}
+                    scroll={{ x: 1820 }}
                     pagination={false}
                     size="middle"
                   />
@@ -829,7 +869,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                     columns={reviewElementColumns}
                     dataSource={reviewElements}
                     rowSelection={rowSelection}
-                    scroll={{ x: 1700 }}
+                    scroll={{ x: 1920 }}
                     pagination={false}
                     size="middle"
                   />
@@ -839,6 +879,30 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           />
         </div>
       )}
+
+      <Modal
+        title={pendingItemReview?.status === 'passed' ? '审核通过备注' : '审核不通过备注'}
+        open={pendingItemReview !== null}
+        onOk={handleItemReviewConfirm}
+        onCancel={() => { setPendingItemReview(null); setItemReviewRemark(''); }}
+        okText="确认"
+        cancelText="取消"
+        okButtonProps={{ danger: pendingItemReview?.status === 'rejected' }}
+        destroyOnHidden
+      >
+        <p style={{ color: '#666' }}>
+          将{pendingItemReview?.ids.length ?? 0}条记录标记为“{pendingItemReview?.status === 'passed' ? '通过' : '不通过'}”。
+          {pendingItemReview?.isBatch && '本次备注将保存到每条选中的记录中。'}
+        </p>
+        <label htmlFor="item-review-remark" style={{ display: 'block', marginBottom: 8 }}>备注（选填）</label>
+        <TextArea
+          id="item-review-remark"
+          rows={4}
+          placeholder="请输入备注，可留空"
+          value={itemReviewRemark}
+          onChange={(event) => setItemReviewRemark(event.target.value)}
+        />
+      </Modal>
 
       {/* Pass Modal */}
       <Modal

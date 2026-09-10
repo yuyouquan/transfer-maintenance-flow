@@ -33,7 +33,6 @@ const TEAM_1: ProjectTeam = {
   research: [
     { id: 'u001', name: '张三', role: 'SPM', department: '项目管理部' },
     { id: 'u002', name: '李四', role: 'TPM', department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
     { id: 'u004', name: '赵六', role: '底软', department: '底软开发部' },
     { id: 'u005', name: '钱七', role: '系统', department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像', department: '影像开发部' },
@@ -51,7 +50,6 @@ const TEAM_2: ProjectTeam = {
   research: [
     { id: 'u010', name: '冯十二', role: 'SPM', department: '项目管理部' },
     { id: 'u011', name: '陈十三', role: 'TPM', department: '测试部' },
-    { id: 'u003', name: '王五', role: 'SQA', department: '质量部' },
     { id: 'u012', name: '褚十四', role: '底软', department: '底软开发部' },
     { id: 'u013', name: '卫十五', role: '系统', department: '系统集成部' },
     { id: 'u014', name: '蒋十六', role: '影像', department: '影像开发部' },

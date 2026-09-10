@@ -11,6 +11,7 @@ import {
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
 import DelegateModal from '@/components/shared/DelegateModal';
+import { LongTextCell } from '@/components/shared/LongTextCell';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import { MOCK_USERS } from '@/mock';
@@ -576,6 +577,10 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       },
     },
     {
+      title: '备注', dataIndex: 'reviewRemark', key: 'reviewRemark', width: 220,
+      render: (text?: string) => <LongTextCell text={text} />,
+    },
+    {
       title: '操作', key: 'actions', width: 130, align: 'center', fixed: 'right',
       render: (_, record) => {
         if (record.reviewStatus === 'passed') {
@@ -617,7 +622,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       ...getReSearchProps('description'),
     },
     {
-      title: '备注', dataIndex: 'remark', key: 'remark', width: 160,
+      title: '模板备注', dataIndex: 'remark', key: 'remark', width: 160,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
     },
@@ -702,6 +707,10 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       },
     },
     {
+      title: '备注', dataIndex: 'reviewRemark', key: 'reviewRemark', width: 220,
+      render: (text?: string) => <LongTextCell text={text} />,
+    },
+    {
       title: '操作', key: 'actions', width: 130, align: 'center', fixed: 'right',
       render: (_, record) => {
         if (record.reviewStatus === 'passed') {
@@ -740,7 +749,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   if (application.status !== 'in_progress') {
     const statusText = application.status === 'failed'
-      ? 'SQA 审核未通过，流程已终止'
+      ? '维护SPM审核未通过，流程已终止'
       : application.status === 'cancelled'
         ? '该转维申请已取消'
         : '该转维申请已完成';
@@ -921,7 +930,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                           dataSource={delegatedChecklistForMe as CheckListItem[]}
                           pagination={false}
                           size="small"
-                          scroll={{ x: 1600 }}
+                          scroll={{ x: 1820 }}
                           style={{ marginBottom: 16 }}
                         />
                       </>
@@ -937,7 +946,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                           dataSource={delegatedReviewElementsForMe as ReviewElement[]}
                           pagination={false}
                           size="small"
-                          scroll={{ x: 1700 }}
+                          scroll={{ x: 1920 }}
                         />
                       </>
                     )}
@@ -997,7 +1006,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                     columns={checklistColumns}
                     dataSource={ownRoleChecklist as CheckListItem[]}
                     pagination={false}
-                    scroll={{ x: 1600 }}
+                    scroll={{ x: 1820 }}
                     size="middle"
                     rowSelection={{
                       selectedRowKeys: selectedChecklistKeys,
@@ -1024,7 +1033,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                     columns={reviewElementColumns}
                     dataSource={ownRoleReviewElements as ReviewElement[]}
                     pagination={false}
-                    scroll={{ x: 1700 }}
+                    scroll={{ x: 1920 }}
                     size="middle"
                     rowSelection={{
                       selectedRowKeys: selectedReviewKeys,

@@ -19,6 +19,7 @@ import type {
 import { MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
 import { useCurrentUser } from '@/context/UserContext';
 import { useApplications } from '@/context/ApplicationContext';
+import { getMaintenanceSpmReviewAccess } from '@/lib/maintenance-spm-review';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -27,7 +28,7 @@ const { TextArea } = Input;
 
 const PAGE_SIZE = 10;
 
-const PIPELINE_NODES = ['项目发起', '资料录入与AI检查', '维护审核', 'SQA审核', '信息变更'] as const;
+const PIPELINE_NODES = ['项目发起', '资料录入与AI检查', '维护审核', '维护SPM审核', '信息变更'] as const;
 
 const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: string }> = {
   not_started: { color: 'default', label: '未开始' },
@@ -39,7 +40,7 @@ const NODE_STATUS_CONFIG: Record<PipelineNodeStatus, { color: string; label: str
 const TODO_TYPE_CONFIG: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
   entry: { color: '#1677ff', label: '录入', icon: <EditOutlined /> },
   review: { color: '#52c41a', label: '评审', icon: <AuditOutlined /> },
-  sqa_review: { color: '#faad14', label: 'SQA审核', icon: <SafetyOutlined /> },
+  maintenance_spm_review: { color: '#faad14', label: '维护SPM审核', icon: <SafetyOutlined /> },
 };
 
 const ROLE_DISPLAY_MAP: Record<string, string> = {
@@ -53,7 +54,7 @@ type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled' | 'failed'
 const getCurrentNodeIndex = (app: TransferApplication): number => {
   const { pipeline } = app;
   if (pipeline.infoChange !== 'not_started') return 4;
-  if (pipeline.sqaReview !== 'not_started') return 3;
+  if (pipeline.maintenanceSpmReview !== 'not_started') return 3;
   if (pipeline.maintenanceReview !== 'not_started') return 2;
   if (pipeline.dataEntry !== 'not_started') return 1;
   return 0;
@@ -62,7 +63,7 @@ const getCurrentNodeIndex = (app: TransferApplication): number => {
 const getCurrentNodeStatus = (app: TransferApplication): PipelineNodeStatus => {
   const { pipeline } = app;
   if (pipeline.infoChange !== 'not_started') return pipeline.infoChange;
-  if (pipeline.sqaReview !== 'not_started') return pipeline.sqaReview;
+  if (pipeline.maintenanceSpmReview !== 'not_started') return pipeline.maintenanceSpmReview;
   if (pipeline.maintenanceReview !== 'not_started') return pipeline.maintenanceReview;
   if (pipeline.dataEntry !== 'not_started') return pipeline.dataEntry;
   return pipeline.projectInit;
@@ -165,6 +166,9 @@ function getUserNodeInfo(
   app: TransferApplication,
   userId: string,
 ): { nodeIndex: number; nodeStatus: PipelineNodeStatus; roleLabel?: string } {
+  const finalReview = getMaintenanceSpmReviewAccess(app, userId);
+  if (finalReview.canReject) return { nodeIndex: 3, nodeStatus: 'in_progress' };
+
   // Check if user is in the research team (entry role)
   const researchMember = app.team.research.find((m) => m.id === userId);
   if (researchMember) {
@@ -192,12 +196,6 @@ function getUserNodeInfo(
         }
       }
     }
-  }
-
-  // SQA user: show sqaReview node when in progress
-  const isSQAUser = app.team.research.some((m) => m.role === 'SQA' && m.id === userId);
-  if (isSQAUser && app.pipeline.sqaReview === 'in_progress') {
-    return { nodeIndex: 3, nodeStatus: app.pipeline.sqaReview };
   }
 
   // No specific role - show global progress
@@ -280,10 +278,22 @@ export default function WorkbenchPage() {
         .filter((a) => a.status !== 'in_progress')
         .map((a) => a.id),
     );
-    return MOCK_TODOS.filter(
-      (todo) => todo.responsiblePerson === currentUser.name && !terminatedIds.has(todo.applicationId),
+    const roleTodos = MOCK_TODOS.filter(
+      (todo) => todo.type !== 'maintenance_spm_review'
+        && todo.responsiblePerson === currentUser.name && !terminatedIds.has(todo.applicationId),
     );
-  }, [currentUser.name, allApplications]);
+    const finalReviewTodos: TodoItem[] = allApplications
+      .filter(app => getMaintenanceSpmReviewAccess(app, currentUser.id).canReject)
+      .map(app => ({
+        id: `maintenance-spm-${app.id}`,
+        applicationId: app.id,
+        projectName: app.projectName,
+        node: '维护SPM审核',
+        responsiblePerson: currentUser.name,
+        type: 'maintenance_spm_review',
+      }));
+    return [...roleTodos, ...finalReviewTodos];
+  }, [currentUser.id, currentUser.name, allApplications]);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -299,7 +309,7 @@ export default function WorkbenchPage() {
   const handleNavigateToDetail = useCallback((id: string) => { router.push(`/workbench/${id}`); }, [router]);
   const handleNavigateToEntry = useCallback((id: string) => { router.push(`/workbench/${id}/entry`); }, [router]);
   const handleNavigateToReview = useCallback((id: string) => { router.push(`/workbench/${id}/review`); }, [router]);
-  const handleNavigateToSqaReview = useCallback((id: string) => { router.push(`/workbench/${id}/sqa-review`); }, [router]);
+  const handleNavigateToMaintenanceSpmReview = useCallback((id: string) => { router.push(`/workbench/${id}/maintenance-spm-review`); }, [router]);
   const handleNavigateToApply = useCallback(() => { router.push('/workbench/apply'); }, [router]);
   const handleReopen = useCallback((id: string) => { router.push(`/workbench/apply?from=${id}`); }, [router]);
 
@@ -328,7 +338,7 @@ export default function WorkbenchPage() {
 
   const handleTodoAction = useCallback(
     (todo: TodoItem) => {
-      const route = todo.type === 'entry' ? 'entry' : todo.type === 'sqa_review' ? 'sqa-review' : 'review';
+      const route = todo.type === 'entry' ? 'entry' : todo.type === 'maintenance_spm_review' ? 'maintenance-spm-review' : 'review';
       router.push(`/workbench/${todo.applicationId}/${route}`);
     },
     [router]
@@ -398,7 +408,7 @@ export default function WorkbenchPage() {
         }
         if (record.status === 'failed') {
           return (
-            <Tooltip title={record.failureReason ? `SQA 驳回：${record.failureReason}` : 'SQA 审核未通过，流程已终止'}>
+            <Tooltip title={record.failureReason ? `维护SPM 驳回：${record.failureReason}` : '维护SPM审核未通过，流程已终止'}>
               <Tag color="error" icon={<ExclamationCircleOutlined />}>已失败</Tag>
             </Tooltip>
           );
@@ -442,7 +452,7 @@ export default function WorkbenchPage() {
       render: (_: unknown, record: TransferApplication) => {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
-        const isSQA = record.team.research.some((m) => m.role === 'SQA' && m.id === currentUser.id);
+        const finalReview = getMaintenanceSpmReviewAccess(record, currentUser.id);
         const isProjectSPM = record.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
         const isAdmin = currentUser.isAdmin === true;
 
@@ -483,21 +493,16 @@ export default function WorkbenchPage() {
         const anyRoleActivelyReviewing = record.pipeline.roleProgress.some(
           (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
         );
-        const anyRoleRejected = record.pipeline.roleProgress.some(
-          (rp) => rp.reviewStatus === 'rejected'
-        );
 
-        // SQA审核按钮：所有角色审核通过(墨绿) / 角色拒绝流程(red) / 正常流程(amber)
+        // 维护SPM审核按钮：所有角色审核通过(墨绿) / 角色拒绝流程(red) / 正常流程(amber)
         const allRoleReviewCompleted = record.pipeline.roleProgress.every(
           (rp) => rp.reviewStatus === 'completed'
         );
-        const showSqaNormal = isInProgress && record.pipeline.sqaReview === 'in_progress' && isSQA;
-        const showSqaRejected = isInProgress && isInReview && anyRoleRejected && isSQA;
-        const showSqaReview = showSqaNormal || showSqaRejected;
-        const sqaButtonColor = showSqaRejected ? '#ff4d4f' : allRoleReviewCompleted ? '#006d5b' : '#faad14';
+        const showMaintenanceSpmReview = finalReview.canReject;
+        const spmButtonColor = finalReview.isRejectionMode ? '#ff4d4f' : allRoleReviewCompleted ? '#006d5b' : '#faad14';
 
-        // 关闭按钮：申请人可关闭，但不能在SQA审核中或有角色正在审核/已通过审核时关闭
-        const showClose = isInProgress && record.pipeline.sqaReview !== 'in_progress' && (
+        // 关闭按钮：申请人可关闭，但不能在维护SPM审核中或有角色正在审核/已通过审核时关闭
+        const showClose = isInProgress && record.pipeline.maintenanceSpmReview !== 'in_progress' && (
           !anyRoleActivelyReviewing && isApplicant
         );
 
@@ -525,11 +530,11 @@ export default function WorkbenchPage() {
                 评审
               </Button>
             )}
-            {showSqaReview && (
+            {showMaintenanceSpmReview && (
               <Button type="text" size="small" icon={<SafetyOutlined />}
-                style={{ color: sqaButtonColor }}
-                onClick={() => handleNavigateToSqaReview(record.id)}>
-                SQA审核
+                style={{ color: spmButtonColor }}
+                onClick={() => handleNavigateToMaintenanceSpmReview(record.id)}>
+                维护SPM审核
               </Button>
             )}
             {showClose && (

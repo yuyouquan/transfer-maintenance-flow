@@ -29,7 +29,8 @@ Node >= 18.0.0 required. Path alias: `@/*` → `./src/*`.
 - `/workbench/[id]` — Application detail view with timeline/history
 - `/workbench/[id]/entry` — Data entry phase (research team, 5 parallel roles)
 - `/workbench/[id]/review` — Maintenance review phase (pass/reject)
-- `/workbench/[id]/sqa-review` — SQA quality assurance sign-off
+- `/workbench/[id]/maintenance-spm-review` — final review by the current application’s maintenance SPM
+- `/workbench/[id]/sqa-review` — compatibility redirect to maintenance-spm-review
 - `/config` — Configuration center (checklist & review element templates)
 
 All interactive pages use `'use client'`. Root layout provides AntdRegistry for server-side rendering.
@@ -40,13 +41,13 @@ All interactive pages use `'use client'`. Root layout provides AntdRegistry for 
 
 **ApplicationContext** (`src/context/ApplicationContext.tsx`): Core state hub managing applications, checklistItems, and reviewElements. Key behavior:
 - Auto-computes `roleProgress` from checklist/review element item statuses
-- Auto-derives pipeline node statuses (dataEntry → maintenanceReview → sqaReview)
-- Cascading transitions: maintenanceReview success → starts sqaReview
+- Auto-derives pipeline node statuses (dataEntry → maintenanceReview → maintenanceSpmReview)
+- Cascading transitions: maintenanceReview success → starts maintenanceSpmReview
 - Uses changed-flag check to prevent redundant updates
 
 ### Pipeline & Status Model
 
-5-stage pipeline: `projectInit → dataEntry → maintenanceReview → sqaReview → infoChange`
+5-stage pipeline: `projectInit → dataEntry → maintenanceReview → maintenanceSpmReview → infoChange`
 
 5 parallel roles per stage: `SPM | 测试 | 底软 | 系统 | 影像`
 
@@ -72,7 +73,7 @@ Key delegation fixtures (for testing the 委派给我的 / 录入委派 / 审核
   - CL[36], CL[37], RE[6] → `delegatedTo: ['u001']` (delegated to 张三, who is also SPM in research team)
   - CL[28] → `delegatedTo: ['u006']` (孙八 is app-001 maintenance SPM, **not** in research; verifies "no role + has delegation" branch)
 - **Review delegation in app-002**:
-  - CL[36], RE[5] → `reviewDelegatedTo: ['u003']` (王五 is not in maintenance team; pure delegate-only audit view)
+  - CL[36], RE[5] → `reviewDelegatedTo: ['u007']` (周九 is not in maintenance team; pure delegate-only audit view)
   - CL[37], CL[38], RE[6] → `reviewDelegatedTo: ['u001']` (张三 is SPM in maintenance; verifies "own role + delegated" combined view)
 - `entryPersonOverride` field on `ItemOverride` interface still exists (line 47) but is unused — kept for symmetry/future extension.
 
@@ -128,3 +129,10 @@ Both scripts require `npm run dev` running on `:3000`. They switch users via Ant
 - Work happens on `dev`; `main` integrates via `--no-ff` merge commits with descriptive subject lines (`Merge branch 'dev': <topic>`).
 - `main` is never merged back into `dev`; dev continues forward on its own history.
 - Commit messages use Conventional Commits prefixes (`feat`, `fix`, `refactor`, `chore`, `docs`).
+
+## Review remarks and final approval
+
+- Single and batch pass/reject ask for optional `reviewRemark`, saved per selected item. Entry and review pages show the latest remark; template `remark` and role-level `reviewComment` stay separate.
+- Teams contain five paired roles; SQA does not participate. Maintenance SPM is required when creating or reopening an application.
+- `src/lib/maintenance-spm-review.ts` centralizes final-review permission and state checks. Only the application’s assigned maintenance SPM may decide; other SPM users and administrators do not inherit approval authority.
+- Regression commands: `node scripts/test-maintenance-spm-access.mjs`, `node scripts/verify-maintenance-spm-review.mjs`, `node scripts/verify-review-remarks.mjs`. Browser scripts default to a production preview on port 3001.

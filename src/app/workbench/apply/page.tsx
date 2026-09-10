@@ -262,7 +262,7 @@ function ApplyPageContent() {
 
   // Initialize team members from project data
   const initTeamFromProject = useCallback((project: Project) => {
-    // Build paired rows: SPM, TPM, 底软, 系统, then SQA at end of research
+    // Build the five paired research and maintenance roles
     const researchRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
     const maintenanceRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
 
@@ -272,10 +272,6 @@ function ApplyPageContent() {
       researchRows.push({ role, member: resMember });
       maintenanceRows.push({ role, member: mainMember });
     }
-
-    // SQA only in research team (last row)
-    const sqaMember = project.team.research.find((m) => m.role === 'SQA') ?? null;
-    researchRows.push({ role: 'SQA', member: sqaMember });
 
     setResearchMembers(researchRows);
     setMaintenanceMembers(maintenanceRows);
@@ -320,8 +316,6 @@ function ApplyPageContent() {
         member: sourceApp.team.maintenance.find((m) => m.role === role) ?? null,
       });
     }
-    const sqa = sourceApp.team.research.find((m) => m.role === 'SQA') ?? null;
-    researchRows.push({ role: 'SQA', member: sqa });
     setResearchMembers(researchRows);
     setMaintenanceMembers(maintenanceRows);
   }, [sourceApp, form]);
@@ -360,6 +354,10 @@ function ApplyPageContent() {
   const handleSubmit = useCallback(
     async (values: ApplyFormValues) => {
       if (!selectedProject) return;
+      if (!maintenanceMembers.some(row => row.role === 'SPM' && row.member)) {
+        message.warning('请选择维护SPM，负责维护SPM审核');
+        return;
+      }
       setSubmitting(true);
       try {
         await new Promise((resolve) => setTimeout(resolve, 800));
@@ -393,7 +391,7 @@ function ApplyPageContent() {
             projectInit: 'success',
             dataEntry: 'in_progress',
             maintenanceReview: 'not_started',
-            sqaReview: 'not_started',
+            maintenanceSpmReview: 'not_started',
             infoChange: 'not_started',
             roleProgress: [
               { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },
@@ -484,7 +482,7 @@ function ApplyPageContent() {
             title="基于已终止的转维申请重新发起"
             description={
               <div style={{ fontSize: 13 }}>
-                <div>原申请 SQA 驳回原因：{sourceApp.failureReason ?? '（无）'}</div>
+                <div>原申请 维护SPM 驳回原因：{sourceApp.failureReason ?? '（无）'}</div>
                 <div style={{ marginTop: 4, color: '#666' }}>
                   发起后将按最新的 CheckList 与评审要素模板创建新流水线；已录入过的项会自动回填，模板新增的项为空白，模板删除的项将不再出现。AI 检查与维护审核结果会清空，由各角色负责人重新提交。
                 </div>
@@ -552,12 +550,13 @@ function ApplyPageContent() {
 
           {/* 项目人员 - 一一对应布局 */}
           {selectedProject && researchMembers.length > 0 && (
-            <Form.Item label="项目人员">
+            <Form.Item label="项目人员" required>
               <Card
                 size="small"
                 style={{ borderRadius: 8 }}
                 styles={{ body: { padding: '16px 20px' } }}
               >
+                <p style={{ color: '#666', marginTop: 0 }}>维护SPM为必选人员，负责各领域维护审核后的最终确认。</p>
                 {/* 表头 */}
                 <Row gutter={16} style={{ marginBottom: 12 }}>
                   <Col span={11}>
@@ -654,48 +653,6 @@ function ApplyPageContent() {
                   );
                 })}
 
-                {/* SQA - 仅在研团队，放最后 */}
-                {researchMembers.find((r) => r.role === 'SQA') && (
-                  <>
-                    <div
-                      style={{
-                        borderTop: '1px dashed #e8e8e8',
-                        margin: '12px 0',
-                      }}
-                    />
-                    <Row gutter={16}>
-                      <Col span={11}>
-                        <MemberSelect
-                          role="SQA"
-                          member={researchMembers.find((r) => r.role === 'SQA')?.member ?? null}
-                          teamType="research"
-                          onChangeMember={handleChangeMember}
-                          allMembers={MOCK_USERS}
-                          usedMemberIds={usedResearchIds}
-                        />
-                      </Col>
-                      <Col span={2} />
-                      <Col span={11}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '100%',
-                            minHeight: 52,
-                            borderRadius: 8,
-                            background: '#fafafa',
-                            border: '1px dashed #e8e8e8',
-                            color: '#bbb',
-                            fontSize: 12,
-                          }}
-                        >
-                          SQA 仅在研团队
-                        </div>
-                      </Col>
-                    </Row>
-                  </>
-                )}
               </Card>
             </Form.Item>
           )}

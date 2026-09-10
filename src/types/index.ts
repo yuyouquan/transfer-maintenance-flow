@@ -89,7 +89,7 @@ export interface PipelineState {
   readonly projectInit: PipelineNodeStatus;
   readonly dataEntry: PipelineNodeStatus;
   readonly maintenanceReview: PipelineNodeStatus;
-  readonly sqaReview: PipelineNodeStatus;
+  readonly maintenanceSpmReview: PipelineNodeStatus;
   readonly infoChange: PipelineNodeStatus;
   readonly roleProgress: ReadonlyArray<RoleProgress>;
 }
@@ -115,6 +115,8 @@ export interface CheckListItem {
   readonly aiCheckResult?: string;
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
+  /** 最近一次单条／批量审核备注，独立于角色评审意见。 */
+  readonly reviewRemark?: string;
   readonly delegatedTo?: ReadonlyArray<string>;
   readonly reviewDelegatedTo?: ReadonlyArray<string>;
 }
@@ -141,6 +143,8 @@ export interface ReviewElement {
   readonly aiCheckResult?: string;
   readonly reviewStatus: ReviewStatus;
   readonly reviewComment?: string;
+  /** 最近一次单条／批量审核备注，独立于模板备注。 */
+  readonly reviewRemark?: string;
   readonly delegatedTo?: ReadonlyArray<string>;
   readonly reviewDelegatedTo?: ReadonlyArray<string>;
 }
@@ -201,7 +205,7 @@ export interface TodoItem {
   readonly projectName: string;
   readonly node: string;
   readonly responsiblePerson: string;
-  readonly type: 'entry' | 'review' | 'sqa_review';
+  readonly type: 'entry' | 'review' | 'maintenance_spm_review';
 }
 
 // --- 配置中心模板 ---

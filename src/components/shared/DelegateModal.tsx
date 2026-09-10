@@ -51,7 +51,7 @@ export default function DelegateModal(props: DelegateModalProps) {
   const options = React.useMemo(
     () =>
       MOCK_USERS
-        .filter((u) => !excluded.has(u.id))
+        .filter((u) => u.role !== 'SQA' && !excluded.has(u.id))
         .map((u) => ({ value: u.id, label: `${u.name} (${u.role} - ${u.department})` })),
     [excluded],
   );
