@@ -149,7 +149,9 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes('请选择维护SPM，负责维护SPM审核'));
   assert.ok(page.url().endsWith('/apply'));
   await (await page.$$('form .ant-card .ant-select'))[1].click();
-  await page.waitForSelector('.ant-select-item-option', { visible: true });
+  // Ant Design can retain the hidden project dropdown while the member dropdown opens.
+  await page.waitForFunction(() => [...document.querySelectorAll('.ant-select-item-option')]
+    .some(el => el.getClientRects().length && el.textContent.includes('冯十二')));
   await page.evaluate(() => [...document.querySelectorAll('.ant-select-item-option')].find(el => el.getClientRects().length && el.textContent.includes('冯十二'))?.click());
   await screenshot('create-team.png');
   await clickText('button', '提交');
