@@ -46,6 +46,7 @@ import type {
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
+import { MOCK_USERS } from '@/mock/users';
 
 // --- 状态标签渲染 ---
 
@@ -135,6 +136,33 @@ function renderReviewStatusTag(
 
 function renderEntryContent(record: { entryContent?: string }): React.ReactNode {
   return <EntryContentRenderer content={record.entryContent} />;
+}
+
+function renderPersonnel(
+  person: string,
+  delegatedTo: ReadonlyArray<string> | undefined,
+  delegationType: '录入' | '审核',
+): React.ReactNode {
+  const delegateId = delegatedTo?.[0];
+  const delegateName = delegateId
+    ? MOCK_USERS.find((user) => user.id === delegateId)?.name ?? delegateId
+    : undefined;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+        <span>{person || '-'}</span>
+        {delegateId && (
+          <Tag color="purple" variant="outlined" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
+        )}
+      </div>
+      {delegateName && (
+        <Tag color="blue" variant="outlined" style={{ fontSize: 11, marginRight: 0 }}>
+          {delegationType}委派→{delegateName}
+        </Tag>
+      )}
+    </div>
+  );
 }
 
 // --- 团队成员卡片 ---
@@ -360,11 +388,22 @@ export default function ApplicationDetailPage({
       align: 'center',
     },
     {
-      title: '责任人',
+      title: '录入人员',
       dataIndex: 'entryPerson',
       key: 'entryPerson',
-      width: 80,
+      width: 160,
       align: 'center',
+      render: (person: string, record: CheckListItem) =>
+        renderPersonnel(person, record.delegatedTo, '录入'),
+    },
+    {
+      title: '审核人员',
+      dataIndex: 'reviewPerson',
+      key: 'reviewPerson',
+      width: 160,
+      align: 'center',
+      render: (person: string, record: CheckListItem) =>
+        renderPersonnel(person, record.reviewDelegatedTo, '审核'),
     },
     {
       title: '交付件',
@@ -437,11 +476,22 @@ export default function ApplicationDetailPage({
       ellipsis: true,
     },
     {
-      title: '责任人',
+      title: '录入人员',
       dataIndex: 'entryPerson',
       key: 'entryPerson',
-      width: 80,
+      width: 160,
       align: 'center',
+      render: (person: string, record: ReviewElement) =>
+        renderPersonnel(person, record.delegatedTo, '录入'),
+    },
+    {
+      title: '审核人员',
+      dataIndex: 'reviewPerson',
+      key: 'reviewPerson',
+      width: 160,
+      align: 'center',
+      render: (person: string, record: ReviewElement) =>
+        renderPersonnel(person, record.reviewDelegatedTo, '审核'),
     },
     {
       title: '交付件',
@@ -781,7 +831,7 @@ export default function ApplicationDetailPage({
               rowKey="id"
               pagination={false}
               size="small"
-              scroll={{ x: 1000 }}
+              scroll={{ x: 1290 }}
               locale={{ emptyText: '暂无检查项' }}
             />
           </Card>
@@ -794,7 +844,7 @@ export default function ApplicationDetailPage({
               rowKey="id"
               pagination={false}
               size="small"
-              scroll={{ x: 1000 }}
+              scroll={{ x: 1310 }}
               locale={{ emptyText: '暂无评审要素' }}
             />
           </Card>
