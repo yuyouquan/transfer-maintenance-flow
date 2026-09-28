@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { Tooltip } from 'antd';
-import type { PipelineState, PipelineNodeStatus, RoleNodeStatus, PipelineRole } from '@/types';
+import type { TransferRole } from '@/types/config';
+import type { PipelineState, PipelineNodeStatus, RoleNodeStatus } from '@/types';
 
 interface PipelineProgressProps {
   readonly pipeline: PipelineState;
   readonly showRoleDots?: boolean;
+  readonly roles?: ReadonlyArray<TransferRole>;
 }
 
 const NODE_LABELS = ['项目发起', '资料录入与AI检查', '维护审核', '维护SPM审核', '信息变更'] as const;
@@ -32,15 +34,7 @@ const ROLE_STATUS_LABELS: Record<RoleNodeStatus, string> = {
   rejected: '被拒绝',
 };
 
-const ROLE_LABELS: Record<PipelineRole, string> = {
-  'SPM': 'SPM',
-  '测试': '测试',
-  '底软': '底软',
-  '系统': '系统',
-  '影像': '影像',
-};
-
-export default function PipelineProgress({ pipeline, showRoleDots = true }: PipelineProgressProps) {
+export default function PipelineProgress({ pipeline, roles, showRoleDots = true }: PipelineProgressProps) {
   const nodeStatuses: ReadonlyArray<PipelineNodeStatus> = [
     pipeline.projectInit,
     pipeline.dataEntry,
@@ -79,7 +73,7 @@ export default function PipelineProgress({ pipeline, showRoleDots = true }: Pipe
                   {pipeline.roleProgress.map((rp) => {
                     // 当某角色维护审核被驳回时：资料录入节点回滚为「不通过」(rejected)，
                     // 维护审核节点回滚为「待审核」(not_started)，等待资料修改后重新提交。
-                    const isRoleBouncedBack = rp.reviewStatus === 'rejected';
+                    const isRoleBouncedBack = (index === 1 ? rp.entryStatus : rp.reviewStatus) === 'rejected';
                     let roleStatus: RoleNodeStatus;
                     let labelText: string;
                     if (index === 1) {
@@ -93,7 +87,7 @@ export default function PipelineProgress({ pipeline, showRoleDots = true }: Pipe
                     return (
                       <Tooltip
                         key={rp.role}
-                        title={`${ROLE_LABELS[rp.role]}: ${labelText}`}
+                        title={`${roles?.find(role => role.id === rp.role)?.name ?? rp.role}: ${labelText}`}
                       >
                         <div
                           style={{

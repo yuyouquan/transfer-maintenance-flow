@@ -11,23 +11,11 @@ for (const required of ['Popover', 'CopyOutlined', 'navigator.clipboard.writeTex
   assert.ok(component.includes(required), `${componentPath} should include ${required}`);
 }
 
-const usages = [
-  {
-    page: 'src/app/config/checklist/page.tsx',
-    fields: ['checkItem', 'aiCheckRule'],
-  },
-  {
-    page: 'src/app/config/review-elements/page.tsx',
-    fields: ['description', 'remark', 'aiCheckRule'],
-  },
-];
-
-for (const usage of usages) {
-  const page = readFileSync(join(root, usage.page), 'utf8');
-  assert.ok(page.includes("import { LongTextCell } from '@/components/shared/LongTextCell'"), `${usage.page} should import LongTextCell`);
-
-  for (const field of usage.fields) {
-    assert.ok(page.includes(`render: (${field}: string) => (`), `${usage.page} should render ${field} through LongTextCell`);
-    assert.ok(page.includes(`<LongTextCell text={${field}} />`), `${usage.page} should pass ${field} to LongTextCell`);
-  }
+// Configuration routes share one table for both template kinds.
+const tablePath = 'src/components/config/TemplateRowsTable.tsx';
+const table = readFileSync(join(root, tablePath), 'utf8');
+assert.ok(table.includes("import { LongTextCell } from '@/components/shared/LongTextCell'"));
+for (const field of ['content', 'type', 'remark', 'aiCheckRule']) {
+  assert.match(table, new RegExp(`dataIndex: '${field}'[^\\n]+<LongTextCell text=\\{text\\}`), `${tablePath} renders ${field} with long-text preview`);
 }
+console.log('PASS: shared template table retains long-text previews');

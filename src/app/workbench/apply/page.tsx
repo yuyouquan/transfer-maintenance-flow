@@ -31,20 +31,13 @@ import dayjs from 'dayjs';
 import type { Project, TeamMember, RoleType, TransferApplication } from '@/types';
 import { useCurrentUser } from '@/context/UserContext';
 import { useApplications } from '@/context/ApplicationContext';
+import { useConfiguration } from '@/context/ConfigurationContext';
+import { PROJECT_TYPE_LABELS } from '@/types/config';
+import { getSpmMember } from '@/lib/workflow-roles';
+import { matchConfiguredMember, validateApplicationTeam } from '@/lib/project-team';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-
-// --- 角色显示名映射 ---
-
-const ROLE_DISPLAY_NAMES: Readonly<Record<RoleType, string>> = {
-  SPM: 'SPM',
-  TPM: 'TPM',
-  SQA: 'SQA',
-  '底软': '底软集成开发代表',
-  '系统': '系统集成开发代表',
-  '影像': '影像开发代表',
-};
 
 const ROLE_COLORS: Readonly<Record<RoleType, string>> = {
   SPM: '#4338ca',
@@ -54,9 +47,6 @@ const ROLE_COLORS: Readonly<Record<RoleType, string>> = {
   '系统': '#dc2626',
   '影像': '#7c3aed',
 };
-
-// --- 对应角色顺序（不含SQA） ---
-const PAIRED_ROLES: ReadonlyArray<RoleType> = ['SPM', 'TPM', '底软', '系统', '影像'];
 
 // --- 转维指南卡片数据 ---
 
@@ -96,20 +86,17 @@ interface ApplyFormValues {
 
 interface MemberSelectProps {
   readonly role: RoleType;
+  readonly roleLabel: string;
   readonly member: TeamMember | null;
   readonly teamType: 'research' | 'maintenance';
   readonly onChangeMember: (teamType: 'research' | 'maintenance', role: RoleType, userId: string | null) => void;
   readonly allMembers: ReadonlyArray<TeamMember>;
-  readonly usedMemberIds: ReadonlyArray<string>;
 }
 
-function MemberSelect({ role, member, teamType, onChangeMember, allMembers, usedMemberIds }: MemberSelectProps) {
+function MemberSelect({ role, roleLabel, member, teamType, onChangeMember, allMembers }: MemberSelectProps) {
   const roleColor = ROLE_COLORS[role] ?? '#666';
-  const roleLabel = ROLE_DISPLAY_NAMES[role] ?? role;
 
-  // Filter members that match this role and are not already used in this team
   const availableOptions = allMembers
-    .filter((m) => m.role === role && (!usedMemberIds.includes(m.id) || m.id === member?.id))
     .map((m) => ({
       label: `${m.name}（${m.department}）`,
       value: m.id,
@@ -142,10 +129,13 @@ function MemberSelect({ role, member, teamType, onChangeMember, allMembers, used
         </Tag>
         <Select
           size="small"
+          aria-label={`${teamType === 'research' ? '在研' : '维护'}团队-${roleLabel}`}
           placeholder="请选择人员"
           value={member?.id ?? undefined}
           options={availableOptions}
           onChange={(val) => onChangeMember(teamType, role, val ?? null)}
+          showSearch
+          optionFilterProp="label"
           allowClear
           onClear={() => onChangeMember(teamType, role, null)}
           style={{ width: '100%' }}
@@ -209,6 +199,8 @@ function ApplyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromId = searchParams?.get('from') ?? null;
+  const boundProjectId = searchParams?.get('projectId') ?? null;
+  const { configurations } = useConfiguration();
   const { currentUser } = useCurrentUser();
   const { applications, addApplication, reopenApplication } = useApplications();
   const [form] = Form.useForm<ApplyFormValues>();
@@ -230,7 +222,7 @@ function ApplyPageContent() {
   const canReopenSource = useMemo(() => {
     if (!sourceApp) return false;
     if (currentUser.isAdmin) return true;
-    return sourceApp.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+    return getSpmMember(sourceApp, 'research')?.id === currentUser.id;
   }, [sourceApp, currentUser]);
 
   // Projects with active (in_progress/completed) applications cannot be selected again.
@@ -260,22 +252,15 @@ function ApplyPageContent() {
     [selectedProjectId]
   );
 
-  // Initialize team members from project data
+  const projectType = selectedProject?.projectType ?? 'device';
+  const config = configurations[projectType];
+  const configuredRoles = config.roles;
+
   const initTeamFromProject = useCallback((project: Project) => {
-    // Build the five paired research and maintenance roles
-    const researchRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
-    const maintenanceRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
-
-    for (const role of PAIRED_ROLES) {
-      const resMember = project.team.research.find((m) => m.role === role) ?? null;
-      const mainMember = project.team.maintenance.find((m) => m.role === role) ?? null;
-      researchRows.push({ role, member: resMember });
-      maintenanceRows.push({ role, member: mainMember });
-    }
-
-    setResearchMembers(researchRows);
-    setMaintenanceMembers(maintenanceRows);
-  }, []);
+    const roles = configurations[project.projectType ?? 'device'].roles;
+    setResearchMembers(roles.map(role => ({ role: role.id, member: matchConfiguredMember(project.team.research, role) })));
+    setMaintenanceMembers(roles.map(role => ({ role: role.id, member: matchConfiguredMember(project.team.maintenance, role) })));
+  }, [configurations]);
 
   const handleProjectChange = useCallback(
     (value: string) => {
@@ -304,21 +289,19 @@ function ApplyPageContent() {
       remark: sourceApp.remark,
     });
 
-    const researchRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
-    const maintenanceRows: Array<{ role: RoleType; member: TeamMember | null }> = [];
-    for (const role of PAIRED_ROLES) {
-      researchRows.push({
-        role,
-        member: sourceApp.team.research.find((m) => m.role === role) ?? null,
-      });
-      maintenanceRows.push({
-        role,
-        member: sourceApp.team.maintenance.find((m) => m.role === role) ?? null,
-      });
+    const project = MOCK_PROJECTS.find(p => p.id === sourceApp.projectId);
+    if (project) initTeamFromProject(project);
+  }, [sourceApp, form, initTeamFromProject]);
+
+  useEffect(() => {
+    if (sourceApp || !boundProjectId) return;
+    const project = MOCK_PROJECTS.find(p => p.id === boundProjectId);
+    if (project) {
+      form.setFieldValue('projectId', project.id);
+      setSelectedProjectId(project.id);
+      initTeamFromProject(project);
     }
-    setResearchMembers(researchRows);
-    setMaintenanceMembers(maintenanceRows);
-  }, [sourceApp, form]);
+  }, [boundProjectId, sourceApp, form, initTeamFromProject]);
 
   const handleChangeMember = useCallback(
     (teamType: 'research' | 'maintenance', role: RoleType, userId: string | null) => {
@@ -341,46 +324,31 @@ function ApplyPageContent() {
     []
   );
 
-  // Collect used member IDs per team to avoid duplicate selection
-  const usedResearchIds = useMemo(
-    () => researchMembers.filter((r) => r.member).map((r) => r.member!.id),
-    [researchMembers]
-  );
-  const usedMaintenanceIds = useMemo(
-    () => maintenanceMembers.filter((r) => r.member).map((r) => r.member!.id),
-    [maintenanceMembers]
-  );
-
   const handleSubmit = useCallback(
     async (values: ApplyFormValues) => {
       if (!selectedProject) return;
-      if (!maintenanceMembers.some(row => row.role === 'SPM' && row.member)) {
-        message.warning('请选择维护SPM，负责维护SPM审核');
-        return;
-      }
+      if (activeProjectIds.has(selectedProject.id)) { message.warning('该项目已有生效的转维申请'); return; }
+      if (sourceApp && (!canReopenSource || sourceApp.status !== 'failed' || sourceApp.reopenedAsId)) { message.warning('当前申请不可重新发起'); return; }
+      const snapshotTeam = (members: typeof researchMembers): TeamMember[] => members.flatMap(row => {
+        const role = configuredRoles.find(r => r.id === row.role);
+        return row.member && role ? [{ ...row.member, role: role.id, roleName: role.name, ipmRoleCode: role.ipmRoleCode }] : [];
+      });
+      const team = { research: snapshotTeam(researchMembers), maintenance: snapshotTeam(maintenanceMembers) };
+      const problem = validateApplicationTeam(team, config, projectType);
+      if (problem) { message.warning(problem); return; }
       setSubmitting(true);
       try {
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Build team from editable members
-        const researchTeam: TeamMember[] = researchMembers
-          .filter((r) => r.member)
-          .map((r) => r.member!);
-        const maintenanceTeam: TeamMember[] = maintenanceMembers
-          .filter((r) => r.member)
-          .map((r) => r.member!);
-
         const now = new Date().toISOString();
         const newApp: TransferApplication = {
           id: `app-${Date.now()}`,
           projectId: selectedProject.id,
+          projectType,
+          roles: configuredRoles.map(role => ({ ...role })),
+          templateVersions: { checklist: config.checklistVersions[0].id, ...(projectType === 'device' ? { review_element: config.reviewVersions[0]?.id } : {}) },
           projectName: selectedProject.name,
           applicant: currentUser.name,
           applicantId: currentUser.id,
-          team: {
-            research: researchTeam,
-            maintenance: maintenanceTeam,
-          },
+          team,
           plannedReviewDate: values.plannedReviewDate
             ? dayjs(values.plannedReviewDate as string | Date).format('YYYY-MM-DD')
             : '',
@@ -393,13 +361,7 @@ function ApplyPageContent() {
             maintenanceReview: 'not_started',
             maintenanceSpmReview: 'not_started',
             infoChange: 'not_started',
-            roleProgress: [
-              { role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' },
-              { role: '测试', entryStatus: 'not_started', reviewStatus: 'not_started' },
-              { role: '底软', entryStatus: 'not_started', reviewStatus: 'not_started' },
-              { role: '系统', entryStatus: 'not_started', reviewStatus: 'not_started' },
-              { role: '影像', entryStatus: 'not_started', reviewStatus: 'not_started' },
-            ],
+            roleProgress: configuredRoles.map(role => ({ role: role.id, entryStatus: 'not_started', reviewStatus: 'not_started' })),
           },
           createdAt: now,
           updatedAt: now,
@@ -407,7 +369,7 @@ function ApplyPageContent() {
 
         if (sourceApp) {
           reopenApplication(sourceApp.id, newApp);
-          message.success('转维申请已重新发起，之前录入的内容已保留');
+          message.success('转维申请已重新发起，匹配成功的历史录入已回填');
         } else {
           addApplication(newApp);
           message.success('转维申请提交成功！');
@@ -419,7 +381,7 @@ function ApplyPageContent() {
         setSubmitting(false);
       }
     },
-    [router, selectedProject, currentUser, researchMembers, maintenanceMembers, addApplication, reopenApplication, sourceApp]
+    [router, selectedProject, currentUser, researchMembers, maintenanceMembers, addApplication, reopenApplication, sourceApp, activeProjectIds, canReopenSource, configuredRoles, config, projectType]
   );
 
   const handleCancel = useCallback(() => {
@@ -431,7 +393,7 @@ function ApplyPageContent() {
   );
 
   // Block unauthorized reopen access (direct URL typing)
-  if (isReopen && sourceApp && (!canReopenSource || sourceApp.reopenedAsId)) {
+  if (isReopen && sourceApp && (!canReopenSource || sourceApp.status !== 'failed' || sourceApp.reopenedAsId)) {
     const reason = sourceApp.reopenedAsId
       ? '该申请已被重新发起过，不能再次重开'
       : '只有该项目的 SPM 或系统管理员可以重新发起转维申请';
@@ -484,7 +446,7 @@ function ApplyPageContent() {
               <div style={{ fontSize: 13 }}>
                 <div>原申请 维护SPM 驳回原因：{sourceApp.failureReason ?? '（无）'}</div>
                 <div style={{ marginTop: 4, color: '#666' }}>
-                  发起后将按最新的 CheckList 与评审要素模板创建新流水线；已录入过的项会自动回填，模板新增的项为空白，模板删除的项将不再出现。AI 检查与维护审核结果会清空，由各角色负责人重新提交。
+                  发起后将按当前项目类型的最新模板创建新流水线；仅唯一匹配的历史录入会回填，新增或规则变化的项需要重新录入。AI 检查与维护审核结果会清空，由各角色负责人重新提交。
                 </div>
               </div>
             }
@@ -511,12 +473,13 @@ function ApplyPageContent() {
               optionFilterProp="label"
               options={projectOptions}
               onChange={handleProjectChange}
-              allowClear={!isReopen}
+              allowClear={!isReopen && !boundProjectId}
               onClear={handleClearProject}
-              disabled={isReopen}
+              disabled={isReopen || Boolean(boundProjectId)}
             />
           </Form.Item>
 
+          {selectedProject && <Tag color="blue" style={{ marginBottom: 16 }}>{PROJECT_TYPE_LABELS[projectType]}</Tag>}
           {/* 项目 SPM 信息 */}
           {selectedProject && spmMember && (
             <Descriptions
@@ -556,7 +519,7 @@ function ApplyPageContent() {
                 style={{ borderRadius: 8 }}
                 styles={{ body: { padding: '16px 20px' } }}
               >
-                <p style={{ color: '#666', marginTop: 0 }}>维护SPM为必选人员，负责各领域维护审核后的最终确认。</p>
+                <p style={{ color: '#666', marginTop: 0 }}>请为模板涉及的录入、审核角色及 SPM 配置人员。同一人可承担多个角色。</p>
                 {/* 表头 */}
                 <Row gutter={16} style={{ marginBottom: 12 }}>
                   <Col span={11}>
@@ -593,19 +556,20 @@ function ApplyPageContent() {
                 </Row>
 
                 {/* 对应行：SPM, TPM, 底软, 系统 */}
-                {PAIRED_ROLES.map((role, idx) => {
+                {configuredRoles.map((roleConfig, idx) => {
+                  const role = roleConfig.id;
                   const resRow = researchMembers.find((r) => r.role === role);
                   const mainRow = maintenanceMembers.find((r) => r.role === role);
                   return (
-                    <Row key={role} gutter={16} style={{ marginBottom: idx < PAIRED_ROLES.length - 1 ? 8 : 0 }}>
+                    <Row key={role} gutter={16} style={{ marginBottom: idx < configuredRoles.length - 1 ? 8 : 0 }}>
                       <Col span={11}>
                         <MemberSelect
                           role={role}
+                          roleLabel={roleConfig.name}
                           member={resRow?.member ?? null}
                           teamType="research"
                           onChangeMember={handleChangeMember}
                           allMembers={MOCK_USERS}
-                          usedMemberIds={usedResearchIds}
                         />
                       </Col>
                       <Col span={2} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -642,11 +606,11 @@ function ApplyPageContent() {
                       <Col span={11}>
                         <MemberSelect
                           role={role}
+                          roleLabel={roleConfig.name}
                           member={mainRow?.member ?? null}
                           teamType="maintenance"
                           onChangeMember={handleChangeMember}
                           allMembers={MOCK_USERS}
-                          usedMemberIds={usedMaintenanceIds}
                         />
                       </Col>
                     </Row>
@@ -683,7 +647,7 @@ function ApplyPageContent() {
           {/* 转维指南 */}
           <Form.Item label="转维指南">
             <Row gutter={16}>
-              {GUIDE_CARDS.map((card) => (
+              {GUIDE_CARDS.filter(card => projectType !== 'tos' || card.title !== '转维评审要素').map((card) => (
                 <Col key={card.title} xs={24} sm={8}>
                   <GuideCardItem card={card} />
                 </Col>

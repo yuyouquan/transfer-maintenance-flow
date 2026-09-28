@@ -12,8 +12,6 @@ import {
   Button,
   Modal,
   Empty,
-  Popconfirm,
-  message,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -32,17 +30,19 @@ import {
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
+import LegacyTasksPanel from '@/components/shared/LegacyTasksPanel';
+import { getApplicationRoles, getRoleName, getSpmMember } from '@/lib/workflow-roles';
 import { useApplications } from '@/context/ApplicationContext';
 import { useCurrentUser } from '@/context/UserContext';
 import type {
   CheckListItem,
   ReviewElement,
   BlockTask,
-  LegacyTask,
   EntryStatus,
   AICheckStatus,
   ReviewStatus,
   TeamMember,
+  TransferApplication,
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
@@ -80,12 +80,6 @@ const PIPELINE_STATUS_CONFIG: Record<string, { color: string; label: string }> =
 const BLOCK_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   open: { color: 'red', label: '未解决' },
   resolved: { color: 'green', label: '已解决' },
-  cancelled: { color: 'default', label: '已取消' },
-};
-
-const LEGACY_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  open: { color: 'orange', label: '待处理' },
-  resolved: { color: 'green', label: '已完成' },
   cancelled: { color: 'default', label: '已取消' },
 };
 
@@ -167,12 +161,12 @@ function renderPersonnel(
 
 // --- 团队成员卡片 ---
 
-const ROLE_SORT_ORDER: Record<string, number> = {
-  SPM: 1, TPM: 2, '底软': 3, '系统': 4, '影像': 4.5, SQA: 5,
+const sortTeamMembers = (members: ReadonlyArray<TeamMember>, application: TransferApplication): ReadonlyArray<TeamMember> => {
+  const roleOrder = new Map(getApplicationRoles(application).map((role, index) => [role.id, index]));
+  const normalizedRole = (member: TeamMember) => !application.roles && member.role === 'TPM' ? '测试' : member.role;
+  return members.filter(member => roleOrder.has(normalizedRole(member)))
+    .sort((a, b) => roleOrder.get(normalizedRole(a))! - roleOrder.get(normalizedRole(b))!);
 };
-
-const sortTeamMembers = (members: ReadonlyArray<TeamMember>): ReadonlyArray<TeamMember> =>
-  members.filter((member) => member.role !== 'SQA').sort((a, b) => (ROLE_SORT_ORDER[a.role] ?? 9) - (ROLE_SORT_ORDER[b.role] ?? 9));
 
 const ROLE_AVATAR_COLOR: Record<string, string> = {
   SPM: '#1677ff',
@@ -202,7 +196,7 @@ function TeamMemberCard({ member }: { readonly member: TeamMember }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 14 }}>{member.name}</div>
         <div style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {member.role}{member.department ? ` · ${member.department}` : ''}
+          {member.roleName ?? member.role}{member.department ? ` · ${member.department}` : ''}
         </div>
       </div>
     </div>
@@ -222,7 +216,7 @@ const ANCHOR_SECTIONS = [
   { id: 'section-history', label: '历史记录', icon: <HistoryOutlined /> },
 ] as const;
 
-function FloatingAnchor() {
+function FloatingAnchor({ includeReview = true }: { readonly includeReview?: boolean }) {
   const [activeId, setActiveId] = useState<(typeof ANCHOR_SECTIONS)[number]['id']>(ANCHOR_SECTIONS[0].id);
 
   useEffect(() => {
@@ -274,7 +268,7 @@ function FloatingAnchor() {
         }}>
           页面导航
         </div>
-        {ANCHOR_SECTIONS.map((section) => {
+        {ANCHOR_SECTIONS.filter(section => includeReview || section.id !== 'section-review').map((section) => {
           const isActive = activeId === section.id;
           return (
             <div
@@ -325,7 +319,7 @@ export default function ApplicationDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, blockTasks: ctxBlockTasks, legacyTasks: ctxLegacyTasks, history: ctxHistory, updateLegacyTasks } = useApplications();
+  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, blockTasks: ctxBlockTasks, history: ctxHistory } = useApplications();
   const { currentUser } = useCurrentUser();
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -334,9 +328,8 @@ export default function ApplicationDetailPage({
   const application = applications.find((app) => app.id === id);
 
   const checklistItems = ctxChecklist.filter((item) => item.applicationId === id);
-  const reviewElements = ctxReview.filter((item) => item.applicationId === id);
+  const reviewElements = application?.projectType === 'tos' ? [] : ctxReview.filter((item) => item.applicationId === id);
   const blockTasks = ctxBlockTasks.filter((task) => task.applicationId === id);
-  const legacyTasks = ctxLegacyTasks.filter((task) => task.applicationId === id);
   const historyRecords = ctxHistory
     .filter((record) => record.applicationId === id)
     .slice()
@@ -374,7 +367,7 @@ export default function ApplicationDetailPage({
       align: 'center',
     },
     {
-      title: '检查项目名称',
+      title: '标准',
       dataIndex: 'checkItem',
       key: 'checkItem',
       width: 280,
@@ -386,6 +379,7 @@ export default function ApplicationDetailPage({
       key: 'responsibleRole',
       width: 80,
       align: 'center',
+      render: (role: string) => getRoleName(application, role),
     },
     {
       title: '录入人员',
@@ -606,96 +600,6 @@ export default function ApplicationDetailPage({
     },
   ];
 
-  // --- 遗留任务表格列 ---
-
-  const legacyTaskColumns: ColumnsType<LegacyTask> = [
-    {
-      title: '序号',
-      key: 'index',
-      width: 60,
-      align: 'center',
-      render: (_: unknown, __: LegacyTask, index: number) => index + 1,
-    },
-    {
-      title: '任务描述',
-      dataIndex: 'description',
-      key: 'description',
-      width: 300,
-      ellipsis: true,
-    },
-    {
-      title: '责任人',
-      dataIndex: 'responsiblePerson',
-      key: 'responsiblePerson',
-      width: 80,
-      align: 'center',
-    },
-    {
-      title: '部门',
-      dataIndex: 'department',
-      key: 'department',
-      width: 100,
-      align: 'center',
-    },
-    {
-      title: '截止日期',
-      dataIndex: 'deadline',
-      key: 'deadline',
-      width: 110,
-      align: 'center',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
-      align: 'center',
-      render: (_: unknown, record: LegacyTask) => {
-        const config = LEGACY_TASK_STATUS_CONFIG[record.status];
-        return <Tag color={config.color}>{config.label}</Tag>;
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 110,
-      align: 'center',
-      render: (val: string) => val.slice(0, 10),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 130,
-      align: 'center',
-      fixed: 'right',
-      render: (_: unknown, record: LegacyTask) => {
-        const isResponsible = record.responsiblePerson === currentUser.name;
-        if (record.status !== 'open' || !isResponsible) {
-          return <span style={{ color: '#bfbfbf' }}>-</span>;
-        }
-        return (
-          <Popconfirm
-            title="标记任务为已解决"
-            description="确认该遗留任务已解决？操作后状态将更新为「已解决」。"
-            okText="确认已解决"
-            cancelText="取消"
-            onConfirm={() => {
-              updateLegacyTasks((prev) =>
-                prev.map((t) => (t.id === record.id ? { ...t, status: 'resolved' as const } : t)),
-              );
-              message.success('已标记为已解决');
-            }}
-          >
-            <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }}>
-              标记已解决
-            </Button>
-          </Popconfirm>
-        );
-      },
-    },
-  ];
-
   // --- 历史记录图标 ---
 
   const getTimelineIcon = (action: string) => {
@@ -738,7 +642,7 @@ export default function ApplicationDetailPage({
 
       {/* 维护SPM 驳回失败横幅 */}
       {application.status === 'failed' && (() => {
-        const isProjectSPM = application.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+        const isProjectSPM = getSpmMember(application, 'research')?.id === currentUser.id;
         const isAdmin = currentUser.isAdmin === true;
         const canReopen = !application.reopenedAsId && (isProjectSPM || isAdmin);
         return (
@@ -784,7 +688,7 @@ export default function ApplicationDetailPage({
 
           {/* 5.1 项目流水线 */}
           <Card id="section-pipeline" style={{ marginBottom: 20 }}>
-            <PipelineProgress pipeline={application.pipeline} showRoleDots />
+            <PipelineProgress pipeline={application.pipeline} roles={application.roles} showRoleDots />
           </Card>
 
           {/* 5.2 项目基础信息 */}
@@ -794,7 +698,7 @@ export default function ApplicationDetailPage({
               <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
               <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
               <Descriptions.Item label="转维负责人">
-                {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
+                {getSpmMember(application, 'maintenance')?.name ?? '-'}
               </Descriptions.Item>
               <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
               <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
@@ -809,22 +713,22 @@ export default function ApplicationDetailPage({
           <div id="section-team" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
             <Card title="在研团队" size="small" style={{ flex: 1 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {sortTeamMembers(application.team.research).map((member) => (
-                  <TeamMemberCard key={member.id} member={member} />
+                {sortTeamMembers(application.team.research, application).map((member) => (
+                  <TeamMemberCard key={`${member.role}-${member.id}`} member={member} />
                 ))}
               </div>
             </Card>
             <Card title="维护团队" size="small" style={{ flex: 1 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {sortTeamMembers(application.team.maintenance).map((member) => (
-                  <TeamMemberCard key={member.id} member={member} />
+                {sortTeamMembers(application.team.maintenance, application).map((member) => (
+                  <TeamMemberCard key={`${member.role}-${member.id}`} member={member} />
                 ))}
               </div>
             </Card>
           </div>
 
           {/* 5.4 转维CheckList */}
-          <Card id="section-checklist" title="转维CheckList" style={{ marginBottom: 20 }}>
+          <Card id="section-checklist" title="CheckList" style={{ marginBottom: 20 }}>
             <Table<CheckListItem>
               columns={checklistColumns}
               dataSource={checklistItems}
@@ -837,7 +741,7 @@ export default function ApplicationDetailPage({
           </Card>
 
           {/* 5.5 转维要素评审列表 */}
-          <Card id="section-review" title="转维要素评审列表" style={{ marginBottom: 20 }}>
+          {application.projectType !== 'tos' && <Card id="section-review" title="评审要素" style={{ marginBottom: 20 }}>
             <Table<ReviewElement>
               columns={reviewElementColumns}
               dataSource={reviewElements}
@@ -847,7 +751,7 @@ export default function ApplicationDetailPage({
               scroll={{ x: 1310 }}
               locale={{ emptyText: '暂无评审要素' }}
             />
-          </Card>
+          </Card>}
 
           {/* 5.6 Block任务列表 */}
           <Card id="section-block" title="Block任务列表" style={{ marginBottom: 20 }}>
@@ -863,17 +767,7 @@ export default function ApplicationDetailPage({
           </Card>
 
           {/* 5.7 遗留任务列表 */}
-          <Card id="section-legacy" title="遗留任务列表" style={{ marginBottom: 20 }}>
-            <Table<LegacyTask>
-              columns={legacyTaskColumns}
-              dataSource={legacyTasks}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              scroll={{ x: 1030 }}
-              locale={{ emptyText: '暂无遗留任务' }}
-            />
-          </Card>
+          <LegacyTasksPanel id="section-legacy" application={application} mode="detail" />
 
           {/* 5.8 历史记录 */}
           <Card id="section-history" title="历史记录" style={{ marginBottom: 20 }}>
@@ -904,7 +798,7 @@ export default function ApplicationDetailPage({
         </div>
 
         {/* 右侧悬浮锚点导航 */}
-        <FloatingAnchor />
+        <FloatingAnchor includeReview={application.projectType !== 'tos'} />
       </div>
 
       {/* 结果详情弹窗 */}

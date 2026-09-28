@@ -1,6 +1,7 @@
 // ============================================================
 // 转维电子流系统 - 核心类型定义
 // ============================================================
+import type { ProjectType, TransferRole } from './config';
 
 // --- 枚举类型 ---
 
@@ -23,10 +24,10 @@ export type ReviewStatus = 'not_reviewed' | 'reviewing' | 'passed' | 'rejected';
 export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
 /** 角色类型 */
-export type RoleType = 'SPM' | 'TPM' | 'SQA' | '底软' | '系统' | '影像';
+export type RoleType = string;
 
 /** 流水线角色（五个并行角色） */
-export type PipelineRole = 'SPM' | '测试' | '底软' | '系统' | '影像';
+export type PipelineRole = string;
 
 /** 团队类型 */
 export type TeamType = 'research' | 'maintenance';
@@ -37,6 +38,8 @@ export interface TeamMember {
   readonly id: string;
   readonly name: string;
   readonly role: RoleType;
+  readonly roleName?: string;
+  readonly ipmRoleCode?: string;
   readonly avatar?: string;
   readonly department?: string;
   readonly isAdmin?: boolean;
@@ -53,6 +56,7 @@ export interface Project {
   readonly id: string;
   readonly name: string;
   readonly code: string;
+  readonly projectType?: ProjectType;
   readonly team: ProjectTeam;
 }
 
@@ -62,6 +66,9 @@ export interface TransferApplication {
   readonly id: string;
   readonly projectId: string;
   readonly projectName: string;
+  readonly projectType?: ProjectType;
+  readonly roles?: ReadonlyArray<TransferRole>;
+  readonly templateVersions?: { readonly checklist: string; readonly review_element?: string };
   readonly applicant: string;
   readonly applicantId: string;
   readonly team: ProjectTeam;
@@ -99,7 +106,10 @@ export interface PipelineState {
 export interface CheckListItem {
   readonly id: string;
   readonly applicationId: string;
-  readonly seq: number;
+  readonly seq: string | number;
+  readonly templateItemId?: string;
+  readonly entryRoleId?: string;
+  readonly reviewRoleId?: string;
   readonly type: string;
   readonly checkItem: string;
   readonly responsibleRole: PipelineRole;
@@ -126,7 +136,10 @@ export interface CheckListItem {
 export interface ReviewElement {
   readonly id: string;
   readonly applicationId: string;
-  readonly seq: number;
+  readonly seq: string | number;
+  readonly templateItemId?: string;
+  readonly entryRoleId?: string;
+  readonly reviewRoleId?: string;
   readonly standard: string;
   readonly description: string;
   readonly remark: string;
@@ -179,6 +192,7 @@ export interface LegacyTask {
   readonly id: string;
   readonly applicationId: string;
   readonly responsiblePerson: string;
+  readonly responsiblePersonId?: string;
   readonly department: string;
   readonly description: string;
   readonly deadline: string;

@@ -14,9 +14,10 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type {
-  TransferApplication, TodoItem, PipelineNodeStatus, CloseReviewRow,
+  TransferApplication, TodoItem, PipelineNodeStatus, CloseReviewRow, CheckListItem, ReviewElement,
 } from '@/types';
-import { MOCK_TODOS, MOCK_CHECKLIST_ITEMS, MOCK_REVIEW_ELEMENTS } from '@/mock';
+import { findRoleMember, getUserRoles, getRoleName, getSpmMember, getItemRole } from '@/lib/workflow-roles';
+import { getMaterialActions } from '@/lib/workflow-access';
 import { useCurrentUser } from '@/context/UserContext';
 import { useApplications } from '@/context/ApplicationContext';
 import { getMaintenanceSpmReviewAccess } from '@/lib/maintenance-spm-review';
@@ -41,10 +42,6 @@ const TODO_TYPE_CONFIG: Record<string, { color: string; label: string; icon: Rea
   entry: { color: '#1677ff', label: '录入', icon: <EditOutlined /> },
   review: { color: '#52c41a', label: '评审', icon: <AuditOutlined /> },
   maintenance_spm_review: { color: '#faad14', label: '维护SPM审核', icon: <SafetyOutlined /> },
-};
-
-const ROLE_DISPLAY_MAP: Record<string, string> = {
-  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
 };
 
 type StatusFilter = 'all' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
@@ -83,25 +80,20 @@ const hasAnyRoleEnteredReview = (app: TransferApplication): boolean => {
   );
 };
 
-const buildCloseReviewRows = (app: TransferApplication): ReadonlyArray<CloseReviewRow> => {
+const buildCloseReviewRows = (app: TransferApplication, items: ReadonlyArray<CheckListItem | ReviewElement>): ReadonlyArray<CloseReviewRow> => {
   const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail'> = {
     not_started: 'N/A', in_progress: 'N/A', completed: 'PASS', rejected: 'Fail',
   };
 
   const rows: CloseReviewRow[] = app.pipeline.roleProgress.map((rp) => {
-    const maintenanceMember = app.team.maintenance.find(
-      (m) => m.role === rp.role || (rp.role === '测试' && m.role === 'TPM')
-    );
+    const maintenanceMember = findRoleMember(app, 'maintenance', rp.role);
     let comment = 'N/A';
     if (rp.reviewStatus === 'rejected') {
-      const rejectedItem = [
-        ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === app.id && i.responsibleRole === rp.role),
-        ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === app.id && i.responsibleRole === rp.role),
-      ].find((i) => i.reviewStatus === 'rejected' && i.reviewComment);
+      const rejectedItem = items.find(i => i.applicationId === app.id && getItemRole(i, 'review') === rp.role && i.reviewStatus === 'rejected' && i.reviewComment);
       comment = rejectedItem?.reviewComment ?? '审核不通过';
     }
     return {
-      role: (ROLE_DISPLAY_MAP[rp.role] ?? rp.role) as CloseReviewRow['role'],
+      role: getRoleName(app, rp.role),
       responsiblePerson: maintenanceMember?.name ?? '-',
       conclusion: conclusionMap[rp.reviewStatus] ?? 'N/A',
       comment,
@@ -158,10 +150,6 @@ function StatCard({ title, count, icon, color, bgColor, active, onClick }: StatC
 
 // --- Determine user's node based on their role in the pipeline ---
 
-const TEAM_ROLE_TO_PIPELINE: Record<string, string> = {
-  SPM: 'SPM', TPM: '测试', '底软': '底软', '系统': '系统', '影像': '影像',
-};
-
 function getUserNodeInfo(
   app: TransferApplication,
   userId: string,
@@ -169,33 +157,13 @@ function getUserNodeInfo(
   const finalReview = getMaintenanceSpmReviewAccess(app, userId);
   if (finalReview.canReject) return { nodeIndex: 3, nodeStatus: 'in_progress' };
 
-  // Check if user is in the research team (entry role)
-  const researchMember = app.team.research.find((m) => m.id === userId);
-  if (researchMember) {
-    const pipelineRole = TEAM_ROLE_TO_PIPELINE[researchMember.role];
-    if (pipelineRole) {
-      const rp = app.pipeline.roleProgress.find((r) => r.role === pipelineRole);
-      if (rp) {
-        // If entry not completed, user is at data entry node
-        if (rp.entryStatus !== 'completed') {
-          return { nodeIndex: 1, nodeStatus: app.pipeline.dataEntry, roleLabel: researchMember.role };
-        }
-      }
-    }
+  for (const role of getUserRoles(app, 'research', userId)) {
+    const progress = app.pipeline.roleProgress.find(rp => rp.role === role);
+    if (progress && progress.entryStatus !== 'completed') return { nodeIndex: 1, nodeStatus: app.pipeline.dataEntry, roleLabel: getRoleName(app, role) };
   }
-
-  // Check if user is in the maintenance team (review role)
-  const maintenanceMember = app.team.maintenance.find((m) => m.id === userId);
-  if (maintenanceMember) {
-    const pipelineRole = TEAM_ROLE_TO_PIPELINE[maintenanceMember.role];
-    if (pipelineRole) {
-      const rp = app.pipeline.roleProgress.find((r) => r.role === pipelineRole);
-      if (rp) {
-        if (rp.reviewStatus !== 'completed') {
-          return { nodeIndex: 2, nodeStatus: app.pipeline.maintenanceReview };
-        }
-      }
-    }
+  for (const role of getUserRoles(app, 'maintenance', userId)) {
+    const progress = app.pipeline.roleProgress.find(rp => rp.role === role);
+    if (progress && progress.reviewStatus !== 'completed') return { nodeIndex: 2, nodeStatus: app.pipeline.maintenanceReview };
   }
 
   // No specific role - show global progress
@@ -234,7 +202,8 @@ function MiniPipeline({ app, userId }: { readonly app: TransferApplication; read
 export default function WorkbenchPage() {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
-  const { applications: allApplications } = useApplications();
+  const { applications: allApplications, checklistItems, reviewElements, updateApplication, addHistoryRecord } = useApplications();
+  const materialItems = useMemo(() => [...checklistItems, ...reviewElements], [checklistItems, reviewElements]);
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -273,15 +242,14 @@ export default function WorkbenchPage() {
   }, [filteredApplications, currentPage]);
 
   const userTodos = useMemo(() => {
-    const terminatedIds = new Set(
-      allApplications
-        .filter((a) => a.status !== 'in_progress')
-        .map((a) => a.id),
-    );
-    const roleTodos = MOCK_TODOS.filter(
-      (todo) => todo.type !== 'maintenance_spm_review'
-        && todo.responsiblePerson === currentUser.name && !terminatedIds.has(todo.applicationId),
-    );
+    const roleTodos: TodoItem[] = allApplications.flatMap(app => {
+      const { canEnter, canReview } = getMaterialActions(app, materialItems, currentUser.id);
+      const base = { applicationId: app.id, projectName: app.projectName, responsiblePerson: currentUser.name };
+      return [
+        ...(canEnter ? [{ ...base, id: `entry-${app.id}`, node: '资料录入与AI检查', type: 'entry' as const }] : []),
+        ...(canReview ? [{ ...base, id: `review-${app.id}`, node: '维护审核', type: 'review' as const }] : []),
+      ];
+    });
     const finalReviewTodos: TodoItem[] = allApplications
       .filter(app => getMaintenanceSpmReviewAccess(app, currentUser.id).canReject)
       .map(app => ({
@@ -293,7 +261,7 @@ export default function WorkbenchPage() {
         type: 'maintenance_spm_review',
       }));
     return [...roleTodos, ...finalReviewTodos];
-  }, [currentUser.id, currentUser.name, allApplications]);
+  }, [currentUser.id, currentUser.name, allApplications, materialItems]);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -330,11 +298,19 @@ export default function WorkbenchPage() {
       message.warning('请填写关闭原因');
       return;
     }
+    const latest = allApplications.find(app => app.id === closeTargetApp?.id);
+    if (!latest || latest.status !== 'in_progress' || latest.applicantId !== currentUser.id
+      || latest.pipeline.maintenanceSpmReview !== 'not_started'
+      || materialItems.some(item => item.applicationId === latest.id && ['reviewing', 'passed'].includes(item.reviewStatus))) {
+      message.warning('当前流水线不可关闭'); return;
+    }
+    updateApplication(latest.id, app => ({ ...app, status: 'cancelled', updatedAt: new Date().toISOString() }));
+    addHistoryRecord({ applicationId: latest.id, action: '关闭流水线', operator: currentUser.name, detail: closeReason.trim() });
     message.success('流水线已关闭');
     setCloseModalVisible(false);
     setCloseTargetApp(null);
     setCloseReason('');
-  }, [closeReason]);
+  }, [closeReason, allApplications, closeTargetApp, currentUser, materialItems, updateApplication, addHistoryRecord]);
 
   const handleTodoAction = useCallback(
     (todo: TodoItem) => {
@@ -432,7 +408,7 @@ export default function WorkbenchPage() {
         return (
           <Space size={4} wrap>
             {record.pipeline.roleProgress.map((rp) => {
-              const displayRole = ROLE_DISPLAY_MAP[rp.role] ?? rp.role;
+              const displayRole = getRoleName(record, rp.role);
               const isActive = rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress';
               const isDone = rp.reviewStatus === 'completed';
               const isFail = rp.reviewStatus === 'rejected';
@@ -453,46 +429,13 @@ export default function WorkbenchPage() {
         const isApplicant = record.applicantId === currentUser.id;
         const isInProgress = record.status === 'in_progress';
         const finalReview = getMaintenanceSpmReviewAccess(record, currentUser.id);
-        const isProjectSPM = record.team.research.some((m) => m.role === 'SPM' && m.id === currentUser.id);
+        const isProjectSPM = getSpmMember(record, 'research')?.id === currentUser.id;
         const isAdmin = currentUser.isAdmin === true;
 
-        const isInDataEntry = record.pipeline.dataEntry === 'in_progress';
-        // 当角色审核被拒绝时，即使dataEntry=success，研发侧也需要重新修改资料
-        const hasRejectedRole = record.pipeline.roleProgress.some(
-          (rp) => rp.reviewStatus === 'rejected'
-        );
-        const canEntry = isInDataEntry || hasRejectedRole;
-        const hasEntryRole = record.pipeline.roleProgress.some((rp) => {
-          if (rp.entryStatus === 'completed' && rp.reviewStatus !== 'rejected') return false;
-          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
-          return record.team.research.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
-        });
-        const isDelegatedEntry = [
-          ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
-          ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
-        ].some(
-          (i) =>
-            (i.entryPersonId === currentUser.id || i.delegatedTo?.includes(currentUser.id))
-            && (i.reviewStatus === 'not_reviewed' || i.reviewStatus === 'rejected'),
-        );
-        const showEntry = isInProgress && canEntry && (hasEntryRole || isDelegatedEntry);
-
-        const isDelegatedReview = [
-          ...MOCK_CHECKLIST_ITEMS.filter((i) => i.applicationId === record.id),
-          ...MOCK_REVIEW_ELEMENTS.filter((i) => i.applicationId === record.id),
-        ].some((i) => i.reviewDelegatedTo?.includes(currentUser.id));
-
-        const isInReview = record.pipeline.maintenanceReview === 'in_progress';
-        const hasReviewRole = record.pipeline.roleProgress.some((rp) => {
-          if (rp.reviewStatus !== 'in_progress') return false;
-          const roleMap: Record<string, string> = { SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像' };
-          return record.team.maintenance.some((m) => m.id === currentUser.id && m.role === roleMap[rp.role]);
-        });
-        const showReview = isInProgress && isInReview && (hasReviewRole || isDelegatedReview);
-
-        const anyRoleActivelyReviewing = record.pipeline.roleProgress.some(
-          (rp) => rp.reviewStatus === 'in_progress' || rp.reviewStatus === 'completed'
-        );
+        const actions = getMaterialActions(record, materialItems, currentUser.id);
+        const showEntry = actions.canEnter;
+        const showReview = actions.canReview;
+        const anyRoleActivelyReviewing = materialItems.some(item => item.applicationId === record.id && (item.reviewStatus === 'reviewing' || item.reviewStatus === 'passed'));
 
         // 维护SPM审核按钮：所有角色审核通过(墨绿) / 角色拒绝流程(red) / 正常流程(amber)
         const allRoleReviewCompleted = record.pipeline.roleProgress.every(
@@ -556,7 +499,7 @@ export default function WorkbenchPage() {
     },
   ];
 
-  const closeReviewRows = closeTargetApp ? buildCloseReviewRows(closeTargetApp) : [];
+  const closeReviewRows = closeTargetApp ? buildCloseReviewRows(closeTargetApp, materialItems) : [];
   const showReviewTable = closeTargetApp ? hasAnyRoleEnteredReview(closeTargetApp) : false;
 
   const TODO_PANEL_WIDTH = 340;
