@@ -141,7 +141,7 @@ try {
   await confirm('   ');
   assert.doesNotMatch((await rows())[0].text, /请补充归档链接/);
   console.log('PASS: single review, optional remarks, cancellation and targeted updates');
-  const checklistIds = await verifyBatch('转维材料');
+  const checklistIds = await verifyBatch('CheckList');
   await switchTab('评审要素');
   const elementBefore = await rows();
   const elementId = elementBefore[0].id;
@@ -177,13 +177,13 @@ try {
   // Navigate through existing UI so context state is preserved across pages.
   await switchUser('冯十二');
   await openEntryFromWorkbench('app-002');
-  for (const id of checklistIds) assert.equal(await cell(id, '备注'), '转维材料批量不通过备注');
+  for (const id of checklistIds) assert.equal(await cell(id, '备注'), 'CheckList批量不通过备注');
   await screenshot('entry-rejected-remarks.png', true);
   await clickText(`${main} tr[data-row-key="${checklistIds[0]}"] button`, '录入');
   await page.waitForSelector(`${dialog} textarea`, { visible: true });
   await clickText(`${dialog} .ant-modal-footer button`, '暂存');
   await page.waitForSelector(`${dialog} textarea`, { hidden: true });
-  assert.equal(await cell(checklistIds[0], '备注'), '转维材料批量不通过备注');
+  assert.equal(await cell(checklistIds[0], '备注'), 'CheckList批量不通过备注');
   assert.equal(await cell(checklistIds[0], '维护审核状态'), '未审核');
   await switchTab('评审要素');
   for (const id of elementIds) assert.equal(await cell(id, '备注'), '评审要素批量不通过备注');
@@ -199,13 +199,13 @@ try {
     return target?.dataset.rowKey;
   });
   assert.ok(entryDelegateId);
-  await openSingle(entryDelegateId, '拒绝');
-  await confirm('录入委派项：请补充交付文档');
+  assert.equal(await page.$$eval(`${main} tr[data-row-key="${entryDelegateId}"] button`, buttons => buttons.filter(button => ['通过', '拒绝'].includes(button.textContent.trim())).length), 0, 'Unsubmitted material cannot be reviewed');
   await switchUser('孙八');
   await openEntryFromWorkbench('app-001');
   assert.equal(await page.$(main), null);
-  assert.equal(await cell(entryDelegateId, '备注', 'body'), '录入委派项：请补充交付文档');
-  console.log('PASS: delegate-only entry page reads the matching rejection remark');
+  assert.equal(await cell(entryDelegateId, '备注', 'body'), '-');
+  assert.match(await page.$eval(`tr[data-row-key="${entryDelegateId}"]`, row => row.innerText), /录入委派→孙八/);
+  console.log('PASS: unsubmitted review is blocked and delegate-only entry preserves original assignment');
   assert.deepEqual(errors, [], 'Browser runtime and console errors');
   console.log('PASS: no browser runtime or console errors');
 } catch (error) {

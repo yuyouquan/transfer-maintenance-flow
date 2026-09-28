@@ -29,6 +29,8 @@ import {
 import { useRouter } from 'next/navigation';
 import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
+import LegacyTasksPanel from '@/components/shared/LegacyTasksPanel';
+import { findRoleMember, getApplicationRoles, getItemRole, getRoleName, getSpmMember } from '@/lib/workflow-roles';
 
 import { useApplications } from '@/context/ApplicationContext';
 import { getMaintenanceSpmReviewAccess } from '@/lib/maintenance-spm-review';
@@ -38,7 +40,6 @@ import type {
   CheckListItem,
   ReviewElement,
   BlockTask,
-  LegacyTask,
   TeamMember,
   EntryStatus,
   AICheckStatus,
@@ -84,24 +85,14 @@ const BLOCK_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }>
   cancelled: { color: 'default', label: '已取消' },
 };
 
-const LEGACY_TASK_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  open: { color: 'orange', label: '待处理' },
-  resolved: { color: 'green', label: '已完成' },
-  cancelled: { color: 'default', label: '已取消' },
-};
-
-const ROLE_DISPLAY_MAP: Record<string, string> = {
-  SPM: 'SPM', '测试': 'TPM', '底软': '底软', '系统': '系统', '影像': '影像',
-};
-
 // --- Team member card ---
 
-const ROLE_SORT_ORDER: Record<string, number> = {
-  SPM: 1, TPM: 2, '底软': 3, '系统': 4, '影像': 4.5, SQA: 5,
+const sortTeamMembers = (members: ReadonlyArray<TeamMember>, application: TransferApplication): ReadonlyArray<TeamMember> => {
+  const roleOrder = new Map(getApplicationRoles(application).map((role, index) => [role.id, index]));
+  const normalizedRole = (member: TeamMember) => !application.roles && member.role === 'TPM' ? '测试' : member.role;
+  return members.filter(member => roleOrder.has(normalizedRole(member)))
+    .sort((a, b) => roleOrder.get(normalizedRole(a))! - roleOrder.get(normalizedRole(b))!);
 };
-
-const sortTeamMembers = (members: ReadonlyArray<TeamMember>): ReadonlyArray<TeamMember> =>
-  members.filter((member) => member.role !== 'SQA').sort((a, b) => (ROLE_SORT_ORDER[a.role] ?? 9) - (ROLE_SORT_ORDER[b.role] ?? 9));
 
 const ROLE_AVATAR_COLOR: Record<string, string> = {
   SPM: '#1677ff', TPM: '#52c41a', SQA: '#faad14', '底软': '#722ed1', '系统': '#eb2f96', '影像': '#7c3aed',
@@ -120,7 +111,7 @@ function TeamMemberCard({ member }: { readonly member: TeamMember }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 14 }}>{member.name}</div>
         <div style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {member.role}{member.department ? ` · ${member.department}` : ''}
+          {member.roleName ?? member.role}{member.department ? ` · ${member.department}` : ''}
         </div>
       </div>
     </div>
@@ -130,26 +121,18 @@ function TeamMemberCard({ member }: { readonly member: TeamMember }) {
 // --- Build close review rows ---
 
 function buildCloseReviewRows(app: TransferApplication, items: ReadonlyArray<CheckListItem | ReviewElement>): ReadonlyArray<CloseReviewRow> {
-  const conclusionMap: Record<string, 'N/A' | 'PASS' | 'Fail'> = {
-    not_started: 'N/A', in_progress: 'N/A', completed: 'PASS', rejected: 'Fail',
-  };
-
-  return app.pipeline.roleProgress.map((rp) => {
-    const maintenanceMember = app.team.maintenance.find(
-      (m) => m.role === rp.role || (rp.role === '测试' && m.role === 'TPM')
-    );
-    let comment = 'N/A';
-    if (rp.reviewStatus === 'rejected') {
-      const rejectedItem = items.find(i => i.responsibleRole === rp.role && i.reviewStatus === 'rejected'
-        && (i.reviewRemark || i.reviewComment));
-      comment = rejectedItem?.reviewRemark || rejectedItem?.reviewComment || '审核不通过';
-    } else if (rp.reviewStatus === 'completed') {
-      comment = '审核通过，资料完整';
-    }
+  return getApplicationRoles(app).map(role => {
+    const roleItems = items.filter(item => item.applicationId === app.id && getItemRole(item, 'review') === role.id);
+    const rejectedItems = roleItems.filter(item => item.reviewStatus === 'rejected');
+    const allPassed = roleItems.length > 0 && roleItems.every(item => item.reviewStatus === 'passed');
+    const conclusion = rejectedItems.length ? 'Fail' : allPassed ? 'PASS' : 'N/A';
+    const comment = !roleItems.length ? '无评审任务'
+      : rejectedItems.length ? [...new Set(rejectedItems.map(item => item.reviewRemark || item.reviewComment || '审核不通过'))].join('；')
+        : allPassed ? '审核通过，资料完整' : '待完成审核';
     return {
-      role: (ROLE_DISPLAY_MAP[rp.role] ?? rp.role) as CloseReviewRow['role'],
-      responsiblePerson: maintenanceMember?.name ?? '-',
-      conclusion: conclusionMap[rp.reviewStatus] ?? 'N/A',
+      role: role.id,
+      responsiblePerson: findRoleMember(app, 'maintenance', role.id)?.name ?? '-',
+      conclusion,
       comment,
     };
   });
@@ -174,7 +157,7 @@ const ANCHOR_SECTIONS = [
   { id: 'maintenance-spm-section-approval', label: '维护SPM评审', icon: <SafetyOutlined /> },
 ] as const;
 
-function FloatingAnchor() {
+function FloatingAnchor({ includeReview = true }: { readonly includeReview?: boolean }) {
   const [activeId, setActiveId] = useState<(typeof ANCHOR_SECTIONS)[number]['id']>(ANCHOR_SECTIONS[0].id);
 
   useEffect(() => {
@@ -214,7 +197,7 @@ function FloatingAnchor() {
         }}>
           页面导航
         </div>
-        {ANCHOR_SECTIONS.map((section) => {
+        {ANCHOR_SECTIONS.filter(section => includeReview || section.id !== 'maintenance-spm-section-review').map((section) => {
           const isActive = activeId === section.id;
           return (
             <div
@@ -253,7 +236,7 @@ export default function MaintenanceSpmReviewPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, blockTasks: ctxBlock, legacyTasks: ctxLegacy, updateApplication, addHistoryRecord } = useApplications();
+  const { applications, checklistItems: ctxChecklist, reviewElements: ctxReview, blockTasks: ctxBlock, updateApplication, addHistoryRecord } = useApplications();
   const { currentUser } = useCurrentUser();
 
   const [spmComment, setSpmComment] = useState('');
@@ -268,9 +251,8 @@ export default function MaintenanceSpmReviewPage({
   const { canApprove, canReject, isReviewer, reviewer, isRejectionMode } = reviewAccess;
   const canOperate = canApprove || canReject;
   const checklistItems = ctxChecklist.filter((item) => item.applicationId === id);
-  const reviewElements = ctxReview.filter((item) => item.applicationId === id);
+  const reviewElements = application?.projectType === 'tos' ? [] : ctxReview.filter((item) => item.applicationId === id);
   const blockTasks = ctxBlock.filter((task) => task.applicationId === id);
-  const legacyTasks = ctxLegacy.filter((task) => task.applicationId === id);
 
   const showResultModal = useCallback((title: string, content: string) => {
     setModalTitle(title);
@@ -346,8 +328,8 @@ export default function MaintenanceSpmReviewPage({
 
   const checklistColumns: ColumnsType<CheckListItem> = [
     { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
-    { title: '检查项目名称', dataIndex: 'checkItem', key: 'checkItem', width: 280, ellipsis: true },
-    { title: '所属角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
+    { title: '标准', dataIndex: 'checkItem', key: 'checkItem', width: 280, ellipsis: true },
+    { title: '所属角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center', render: (role: string) => getRoleName(application, role) },
     { title: '责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 80, align: 'center' },
     { title: '交付件', dataIndex: 'deliverables', key: 'deliverables', width: 180, render: (_: unknown, record: CheckListItem) => renderEntryContent(record) },
     {
@@ -431,24 +413,8 @@ export default function MaintenanceSpmReviewPage({
     { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 110, align: 'center', render: (val: string) => val.slice(0, 10) },
   ];
 
-  const legacyTaskColumns: ColumnsType<LegacyTask> = [
-    { title: '序号', key: 'index', width: 60, align: 'center', render: (_: unknown, __: LegacyTask, index: number) => index + 1 },
-    { title: '任务描述', dataIndex: 'description', key: 'description', width: 300, ellipsis: true },
-    { title: '责任人', dataIndex: 'responsiblePerson', key: 'responsiblePerson', width: 80, align: 'center' },
-    { title: '部门', dataIndex: 'department', key: 'department', width: 100, align: 'center' },
-    { title: '截止日期', dataIndex: 'deadline', key: 'deadline', width: 110, align: 'center' },
-    {
-      title: '状态', dataIndex: 'status', key: 'status', width: 90, align: 'center',
-      render: (_: unknown, record: LegacyTask) => {
-        const config = LEGACY_TASK_STATUS_CONFIG[record.status];
-        return <Tag color={config.color}>{config.label}</Tag>;
-      },
-    },
-    { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 110, align: 'center', render: (val: string) => val.slice(0, 10) },
-  ];
-
   const closeReviewColumns: ColumnsType<CloseReviewRow> = [
-    { title: '审核角色', dataIndex: 'role', key: 'role', width: 80, align: 'center' },
+    { title: '审核角色', dataIndex: 'role', key: 'role', width: 80, align: 'center', render: (role: string) => getRoleName(application, role) },
     { title: '责任人', dataIndex: 'responsiblePerson', key: 'responsiblePerson', width: 80, align: 'center' },
     {
       title: '评审结论', dataIndex: 'conclusion', key: 'conclusion', width: 90, align: 'center',
@@ -490,7 +456,7 @@ export default function MaintenanceSpmReviewPage({
 
       {/* 1. Pipeline */}
       <Card id="maintenance-spm-section-pipeline" style={{ marginBottom: 20 }}>
-        <PipelineProgress pipeline={application.pipeline} showRoleDots />
+        <PipelineProgress pipeline={application.pipeline} roles={application.roles} showRoleDots />
       </Card>
 
       {/* 2. Project info */}
@@ -500,7 +466,7 @@ export default function MaintenanceSpmReviewPage({
           <Descriptions.Item label="项目编号">{application.projectId}</Descriptions.Item>
           <Descriptions.Item label="项目负责人">{application.applicant}</Descriptions.Item>
           <Descriptions.Item label="转维负责人">
-            {application.team.maintenance.find((m) => m.role === 'SPM')?.name ?? '-'}
+            {getSpmMember(application, 'maintenance')?.name ?? '-'}
           </Descriptions.Item>
           <Descriptions.Item label="转维启动时间">{application.createdAt.slice(0, 10)}</Descriptions.Item>
           <Descriptions.Item label="转维截止时间">{application.plannedReviewDate}</Descriptions.Item>
@@ -515,22 +481,22 @@ export default function MaintenanceSpmReviewPage({
       <div id="maintenance-spm-section-team" style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
         <Card title="在研团队" size="small" style={{ flex: 1 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {sortTeamMembers(application.team.research).map((member) => (
-              <TeamMemberCard key={member.id} member={member} />
+            {sortTeamMembers(application.team.research, application).map((member) => (
+              <TeamMemberCard key={`${member.role}-${member.id}`} member={member} />
             ))}
           </div>
         </Card>
         <Card title="维护团队" size="small" style={{ flex: 1 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {sortTeamMembers(application.team.maintenance).map((member) => (
-              <TeamMemberCard key={member.id} member={member} />
+            {sortTeamMembers(application.team.maintenance, application).map((member) => (
+              <TeamMemberCard key={`${member.role}-${member.id}`} member={member} />
             ))}
           </div>
         </Card>
       </div>
 
       {/* 4. CheckList (readonly) */}
-      <Card id="maintenance-spm-section-checklist" title="转维CheckList" style={{ marginBottom: 20 }}>
+      <Card id="maintenance-spm-section-checklist" title="CheckList" style={{ marginBottom: 20 }}>
         <Table<CheckListItem>
           columns={checklistColumns}
           dataSource={checklistItems}
@@ -543,7 +509,7 @@ export default function MaintenanceSpmReviewPage({
       </Card>
 
       {/* 5. Review elements (readonly) */}
-      <Card id="maintenance-spm-section-review" title="转维要素评审列表" style={{ marginBottom: 20 }}>
+      {application.projectType !== 'tos' && <Card id="maintenance-spm-section-review" title="评审要素" style={{ marginBottom: 20 }}>
         <Table<ReviewElement>
           columns={reviewElementColumns}
           dataSource={reviewElements}
@@ -553,7 +519,7 @@ export default function MaintenanceSpmReviewPage({
           scroll={{ x: 1000 }}
           locale={{ emptyText: '暂无评审要素' }}
         />
-      </Card>
+      </Card>}
 
       {/* 6. Block tasks */}
       <Card id="maintenance-spm-section-block" title="Block任务列表" style={{ marginBottom: 20 }}>
@@ -569,17 +535,7 @@ export default function MaintenanceSpmReviewPage({
       </Card>
 
       {/* 7. Legacy tasks */}
-      <Card id="maintenance-spm-section-legacy" title="遗留任务列表" style={{ marginBottom: 20 }}>
-        <Table<LegacyTask>
-          columns={legacyTaskColumns}
-          dataSource={legacyTasks}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          scroll={{ x: 900 }}
-          locale={{ emptyText: '暂无遗留任务' }}
-        />
-      </Card>
+      <LegacyTasksPanel id="maintenance-spm-section-legacy" application={application} mode="review" />
 
       {/* 8. Maintenance SPM Review Section */}
       <Card
@@ -667,7 +623,7 @@ export default function MaintenanceSpmReviewPage({
         </div>
 
         {/* Right: floating anchor nav */}
-        <FloatingAnchor />
+        <FloatingAnchor includeReview={application.projectType !== 'tos'} />
       </div>
 
       {/* Approve confirmation modal */}

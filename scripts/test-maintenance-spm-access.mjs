@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import ts from 'typescript';
-
-const source = await readFile(new URL('../src/lib/maintenance-spm-review.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { getMaintenanceSpmReviewAccess: access } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+import { loadTs } from './lib/load-ts.mjs';
+const { getMaintenanceSpmReviewAccess: access } = loadTs('src/lib/maintenance-spm-review.ts');
 const application = {
   status: 'in_progress',
   team: { maintenance: [{ id: 'assigned-spm', role: 'SPM' }] },

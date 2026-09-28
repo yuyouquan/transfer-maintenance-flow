@@ -143,7 +143,7 @@ export function VersionCompareModal(props: Props) {
 
   const compareColumns: ColumnsType<CompareRow> = [
     {
-      title: '序号',
+      title: '行',
       key: 'idx',
       width: 60,
       align: 'center',
@@ -230,7 +230,7 @@ export function VersionCompareModal(props: Props) {
       {!computed ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#bfbfbf' }}>
           <HistoryOutlined style={{ fontSize: 36, display: 'block', marginBottom: 12, color: '#e5e7eb' }} />
-          <div style={{ fontSize: 14, color: '#9ca3af' }}>选择两个版本后点击"开始对比"查看差异</div>
+          <div style={{ fontSize: 14, color: '#9ca3af' }}>选择两个版本后点击“开始对比”查看差异</div>
         </div>
       ) : (
         <>

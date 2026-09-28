@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Table, Button, Tag, Tabs, Modal, Input, Space, Alert, message, Tooltip, Segmented, Collapse, Badge,
 } from 'antd';
@@ -21,15 +21,7 @@ import type {
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
-
-// Map team role to checklist responsibleRole
-const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
-  SPM: 'SPM',
-  TPM: '测试',
-  '底软': '底软',
-  '系统': '系统',
-  '影像': '影像',
-};
+import { getItemRole, getRoleName, getUserRoles } from '@/lib/workflow-roles';
 
 const { TextArea } = Input;
 
@@ -73,15 +65,18 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     [applications, id],
   );
 
-  // Determine ALL responsible roles for the current user in research team
-  const userResponsibleRoles = useMemo<PipelineRole[]>(() => {
-    if (!application) return [];
-    const roles = application.team.research
-      .filter((m) => m.id === currentUser.id)
-      .map((m) => TEAM_ROLE_TO_RESPONSIBLE[m.role])
-      .filter((r): r is string => r != null) as PipelineRole[];
-    return [...new Set(roles)];
-  }, [application, currentUser.id]);
+  const isTos = application?.projectType === 'tos';
+  const canMutate = application?.status === 'in_progress'
+    && application.pipeline.maintenanceSpmReview !== 'success';
+  const userResponsibleRoles = useMemo(
+    () => getUserRoles(application, 'research', currentUser.id),
+    [application, currentUser.id],
+  );
+  const canEditItem = useCallback((item: CheckListItem | ReviewElement) => Boolean(
+    canMutate && item.applicationId === id
+    && (item.reviewStatus === 'not_reviewed' || item.reviewStatus === 'rejected')
+    && (userResponsibleRoles.includes(getItemRole(item, 'entry')) || item.delegatedTo?.includes(currentUser.id)),
+  ), [canMutate, id, userResponsibleRoles, currentUser.id]);
 
   // Active role state — for role switching when user has multiple roles
   // Initialize to first role, sync when roles change via controlled state
@@ -92,15 +87,23 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     return userResponsibleRoles[0] ?? null;
   }, [activeRole, userResponsibleRoles]);
 
+  const effectiveRoleName = getRoleName(application, effectiveRole ?? '');
+
   // Derived from context
   const checklistItems = useMemo(
     () => allCtxChecklist.filter((item) => item.applicationId === id),
     [allCtxChecklist, id],
   );
   const reviewElements = useMemo(
-    () => allCtxReview.filter((item) => item.applicationId === id),
-    [allCtxReview, id],
+    () => isTos ? [] : allCtxReview.filter((item) => item.applicationId === id),
+    [allCtxReview, id, isTos],
   );
+
+  // Static confirmation and pending AI callbacks must read the latest application/user state.
+  const latest = useRef({ application, currentUser, checklistItems, reviewElements });
+  useEffect(() => {
+    latest.current = { application, currentUser, checklistItems, reviewElements };
+  }, [application, currentUser, checklistItems, reviewElements]);
 
   // Wrappers to update context directly
   const setChecklistItems = useCallback(
@@ -127,11 +130,11 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   // --- Own role items (items belonging to effectiveRole) ---
 
   const ownRoleChecklist = useMemo(
-    () => checklistItems.filter((item) => item.responsibleRole === effectiveRole),
+    () => checklistItems.filter((item) => getItemRole(item, 'entry') === effectiveRole),
     [checklistItems, effectiveRole],
   );
   const ownRoleReviewElements = useMemo(
-    () => reviewElements.filter((item) => item.responsibleRole === effectiveRole),
+    () => reviewElements.filter((item) => getItemRole(item, 'entry') === effectiveRole),
     [reviewElements, effectiveRole],
   );
 
@@ -163,7 +166,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
 
   // Tab
-  const [activeTab, setActiveTab] = useState<string>('checklist');
+  const [selectedTab, setActiveTab] = useState<string>('checklist');
+  const activeTab = isTos ? 'checklist' : selectedTab;
 
   // Selection
   const [selectedChecklistKeys, setSelectedChecklistKeys] = useState<React.Key[]>([]);
@@ -171,12 +175,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   // Entry modal
   const [entryModalVisible, setEntryModalVisible] = useState(false);
-  const [entryModalTarget, setEntryModalTarget] = useState<{ id: string; tab: 'checklist' | 'review' } | null>(null);
+  const [entryModalTarget, setEntryModalTarget] = useState<{ id: string; tab: 'checklist' | 'review'; operatorId: string } | null>(null);
   const [entryContent, setEntryContent] = useState('');
 
-  // Delegate modal - single select, reassign entry person
+  // Entry delegation replaces the delegate and preserves the original assignee
   const [delegateModalVisible, setDelegateModalVisible] = useState(false);
-  const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review' } | null>(null);
+  const [delegateTarget, setDelegateTarget] = useState<{ ids: ReadonlyArray<string>; tab: 'checklist' | 'review'; operatorId: string } | null>(null);
   const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
   // AI check detail modal
   const [aiDetailModalVisible, setAiDetailModalVisible] = useState(false);
@@ -200,22 +204,28 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const canSubmitReview = useMemo(() => {
     if (!effectiveRole) return false;
     const hasAny = ownRoleChecklist.length > 0 || ownRoleReviewElements.length > 0;
-    return hasAny && pendingChecklistCount === 0 && pendingReviewCount === 0;
-  }, [effectiveRole, ownRoleChecklist.length, ownRoleReviewElements.length, pendingChecklistCount, pendingReviewCount]);
+    const hasPendingSubmission = [...ownRoleChecklist, ...ownRoleReviewElements]
+      .some(item => item.reviewStatus === 'not_reviewed' || item.reviewStatus === 'rejected');
+    return canMutate && hasAny && hasPendingSubmission && pendingChecklistCount === 0 && pendingReviewCount === 0;
+  }, [effectiveRole, canMutate, ownRoleChecklist, ownRoleReviewElements, pendingChecklistCount, pendingReviewCount]);
 
   const submitTooltip = useMemo(() => {
     if (!effectiveRole) return '';
     if (canSubmitReview) {
-      return `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核`;
+      return `「${effectiveRoleName}」角色所有录入项已通过AI检查，可以提交审核`;
+    }
+    if (ownRoleChecklist.length + ownRoleReviewElements.length > 0
+      && [...ownRoleChecklist, ...ownRoleReviewElements].every(item => item.reviewStatus === 'reviewing' || item.reviewStatus === 'passed')) {
+      return `「${effectiveRoleName}」角色已提交维护审核`;
     }
     if (ownRoleChecklist.length === 0 && ownRoleReviewElements.length === 0) {
-      return `「${effectiveRole}」角色没有任何待录入条目`;
+      return `「${effectiveRoleName}」角色没有任何待录入条目`;
     }
     const parts: string[] = [];
-    if (pendingChecklistCount > 0) parts.push(`转维材料 ${pendingChecklistCount} 项`);
+    if (pendingChecklistCount > 0) parts.push(`CheckList ${pendingChecklistCount} 项`);
     if (pendingReviewCount > 0) parts.push(`评审要素 ${pendingReviewCount} 项`);
     return `还有未完成项：${parts.join('、')}（需录入并通过AI检查）`;
-  }, [effectiveRole, canSubmitReview, ownRoleChecklist.length, ownRoleReviewElements.length, pendingChecklistCount, pendingReviewCount]);
+  }, [effectiveRole, effectiveRoleName, canSubmitReview, ownRoleChecklist, ownRoleReviewElements, pendingChecklistCount, pendingReviewCount]);
 
   // --- Has rejected items (own role, show block alert) ---
 
@@ -237,15 +247,18 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
   const openEntryModal = useCallback((itemId: string, tab: 'checklist' | 'review') => {
     const items = tab === 'checklist' ? checklistItems : reviewElements;
     const item = items.find((i) => i.id === itemId);
-    setEntryContent(item?.entryContent ?? '');
-    setEntryModalTarget({ id: itemId, tab });
+    if (!item || !canEditItem(item)) return;
+    setEntryContent(item.entryContent ?? '');
+    setEntryModalTarget({ id: itemId, tab, operatorId: currentUser.id });
     setEntryModalVisible(true);
-  }, [checklistItems, reviewElements]);
+  }, [checklistItems, reviewElements, canEditItem, currentUser.id]);
 
   // 模拟AI检查完成：1-2秒后自动判定 passed 或 failed
-  const simulateAiCheck = useCallback((itemId: string, tab: 'checklist' | 'review') => {
+  const simulateAiCheck = useCallback((itemId: string, tab: 'checklist' | 'review', submittedContent: string) => {
     const delay = 1000 + Math.random() * 1000;
     setTimeout(() => {
+      const latestApp = latest.current.application;
+      if (latestApp?.status !== 'in_progress' || latestApp.pipeline.maintenanceSpmReview === 'success') return;
       // 90% 通过, 10% 失败
       const passed = Math.random() > 0.1;
       const result: AICheckStatus = passed ? 'passed' : 'failed';
@@ -254,7 +267,8 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         : 'AI检查不通过，请检查内容是否完整或链接是否有效。';
 
       const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T =>
-        item.id === itemId ? { ...item, aiCheckStatus: result, aiCheckResult: aiResult } as T : item;
+        item.id === itemId && item.aiCheckStatus === 'in_progress' && item.entryContent === submittedContent
+          ? { ...item, aiCheckStatus: result, aiCheckResult: aiResult } as T : item;
 
       if (tab === 'checklist') {
         setChecklistItems((prev) => prev.map(updateItem));
@@ -272,6 +286,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
   const handleEntrySave = useCallback((mode: 'draft' | 'confirm') => {
     if (!entryModalTarget) return;
+    const item = (entryModalTarget.tab === 'checklist' ? checklistItems : reviewElements).find(row => row.id === entryModalTarget.id);
+    if (entryModalTarget.operatorId !== currentUser.id || !item || !canEditItem(item)) {
+      message.warning('当前用户、申请或记录已变化，请重新打开录入窗口');
+      setEntryModalVisible(false);
+      return;
+    }
     if (!entryContent.trim()) {
       message.warning('请输入内容');
       return;
@@ -280,13 +300,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     const newEntryStatus: EntryStatus = mode === 'draft' ? 'draft' : 'entered';
     const newAiCheckStatus: AICheckStatus = mode === 'confirm' ? 'in_progress' : 'not_started';
 
-    // 若该项之前被维护审核驳回，重新录入后回到「待审核」状态，
-    // 同时清掉旧的评审意见，避免对新内容产生误导。
-    const resetReviewIfRejected = <T extends { reviewStatus: ReviewStatus; reviewComment?: string }>(
+    // 重新录入后回到「待审核」，保留既有角色评审意见和单项审核备注供追溯。
+    const resetReviewIfRejected = <T extends { reviewStatus: ReviewStatus }>(
       item: T,
     ): T => (
       item.reviewStatus === 'rejected'
-        ? { ...item, reviewStatus: 'not_reviewed' as const, reviewComment: undefined }
+        ? { ...item, reviewStatus: 'not_reviewed' as const }
         : item
     );
 
@@ -310,7 +329,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
     // 确认模式下触发模拟AI检查
     if (mode === 'confirm') {
-      simulateAiCheck(entryModalTarget.id, entryModalTarget.tab);
+      simulateAiCheck(entryModalTarget.id, entryModalTarget.tab, entryContent);
     }
 
     setEntryModalVisible(false);
@@ -322,12 +341,17 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     } else {
       message.success('已确认提交，AI检查进行中...');
     }
-  }, [entryModalTarget, entryContent, setChecklistItems, setReviewElements, simulateAiCheck]);
+  }, [entryModalTarget, entryContent, setChecklistItems, setReviewElements, simulateAiCheck, checklistItems, reviewElements, currentUser.id, canEditItem]);
 
   // --- Delegate modal handlers ---
 
   const openDelegateModal = useCallback(
     (ids: ReadonlyArray<string>, tab: 'checklist' | 'review') => {
+      const items = tab === 'checklist' ? checklistItems : reviewElements;
+      if (!ids.length || !ids.every(itemId => {
+        const item = items.find(row => row.id === itemId);
+        return item && canEditItem(item);
+      })) return;
       // 单条委派且该条已有 delegatedTo 时,回填以支持「转委派」展示
       let current: string | null = null;
       if (ids.length === 1) {
@@ -336,15 +360,24 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
           : reviewElements.find((i) => i.id === ids[0]);
         current = item?.delegatedTo?.[0] ?? null;
       }
-      setDelegateTarget({ ids, tab });
+      setDelegateTarget({ ids, tab, operatorId: currentUser.id });
       setDelegateCurrentAssignee(current);
       setDelegateModalVisible(true);
     },
-    [checklistItems, reviewElements],
+    [checklistItems, reviewElements, canEditItem, currentUser.id],
   );
 
   const handleDelegateConfirm = useCallback((toUserId: string | null) => {
     if (!delegateTarget) return;
+    const items = delegateTarget.tab === 'checklist' ? checklistItems : reviewElements;
+    if (delegateTarget.operatorId !== currentUser.id || !delegateTarget.ids.length || !delegateTarget.ids.every(itemId => {
+      const item = items.find(row => row.id === itemId);
+      return item && canEditItem(item);
+    })) {
+      message.warning('当前用户、申请或记录已变化，请重新选择委派项');
+      setDelegateModalVisible(false);
+      return;
+    }
 
     // 录入页传 allowClear={false},DelegateModal 不会回传 null;
     // 保留这条防御性兜底,行为是直接忽略以维持类型签名。
@@ -373,16 +406,16 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     setDelegateTarget(null);
     setDelegateCurrentAssignee(null);
     message.success(`已委派给 ${targetUser.name}`);
-  }, [delegateTarget, setChecklistItems, setReviewElements]);
+  }, [delegateTarget, setChecklistItems, setReviewElements, checklistItems, reviewElements, currentUser.id, canEditItem]);
 
   // --- Submit review (per active role) ---
 
   const handleSubmitReview = useCallback(() => {
-    if (!effectiveRole) return;
+    if (!effectiveRole || !canSubmitReview || !userResponsibleRoles.includes(effectiveRole)) return;
 
     // 二次校验：确认所有 items 都已 entered + passed
-    const roleClItems = checklistItems.filter((i) => i.responsibleRole === effectiveRole);
-    const roleReItems = reviewElements.filter((i) => i.responsibleRole === effectiveRole);
+    const roleClItems = checklistItems.filter((i) => getItemRole(i, 'entry') === effectiveRole);
+    const roleReItems = reviewElements.filter((i) => getItemRole(i, 'entry') === effectiveRole);
     const allItems = [...roleClItems, ...roleReItems];
     const allReady = allItems.length > 0 && allItems.every(
       (i) => i.entryStatus === 'entered' && i.aiCheckStatus === 'passed',
@@ -406,7 +439,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         ? (
           <div style={{ fontSize: 13, lineHeight: 1.7 }}>
             <div>
-              「{effectiveRole}」角色当前共有 <strong style={{ color: '#ff4d4f' }}>{openBlockCount}</strong> 项未关闭的 Block 任务。
+              「{effectiveRoleName}」角色当前共有 <strong style={{ color: '#ff4d4f' }}>{openBlockCount}</strong> 项未关闭的 Block 任务。
             </div>
             <div style={{ marginTop: 6 }}>
               点击确认提交后，这些 Block 任务会被标记为「已解决」，资料进入维护审核阶段。
@@ -416,20 +449,30 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
         )
-        : `提交后「${effectiveRole}」角色将完成资料录入，进入维护审核阶段，确认提交？`,
+        : `提交后「${effectiveRoleName}」角色将完成资料录入，进入维护审核阶段，确认提交？`,
       okText: isResubmission ? '确认已解决并提交' : '确认提交',
       cancelText: '取消',
       onOk: () => {
+        const current = latest.current;
+        const freshItems = [...current.checklistItems, ...current.reviewElements].filter(item => getItemRole(item, 'entry') === effectiveRole);
+        if (current.currentUser.id !== currentUser.id || current.application?.status !== 'in_progress'
+          || current.application.pipeline.maintenanceSpmReview === 'success'
+          || !getUserRoles(current.application, 'research', current.currentUser.id).includes(effectiveRole)
+          || !freshItems.some(item => item.reviewStatus === 'not_reviewed' || item.reviewStatus === 'rejected')
+          || !freshItems.every(item => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed')) {
+          message.warning('当前用户、申请或材料状态已变化，请重新提交');
+          return;
+        }
         setChecklistItems((prev) =>
           prev.map((item) =>
-            item.responsibleRole === effectiveRole
+            getItemRole(item, 'entry') === effectiveRole && item.reviewStatus !== 'passed'
               ? { ...item, reviewStatus: 'reviewing' as const }
               : item,
           ),
         );
         setReviewElements((prev) =>
           prev.map((item) =>
-            item.responsibleRole === effectiveRole
+            getItemRole(item, 'entry') === effectiveRole && item.reviewStatus !== 'passed'
               ? { ...item, reviewStatus: 'reviewing' as const }
               : item,
           ),
@@ -450,22 +493,22 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
 
         addHistoryRecord({
           applicationId: id,
-          action: `${effectiveRole} 资料录入与AI检查完毕`,
+          action: `${effectiveRoleName} 资料录入与AI检查完毕`,
           operator: currentUser.name,
           detail: isResubmission
-            ? `${effectiveRole} 角色按驳回意见修改资料，重新通过 AI 检查并提交维护审核（${openBlockCount} 项 Block 任务标记为已解决）`
-            : `${effectiveRole} 角色资料全部录入并通过 AI 检查，已提交维护审核`,
+            ? `${effectiveRoleName} 角色按驳回意见修改资料，重新通过 AI 检查并提交维护审核（${openBlockCount} 项 Block 任务标记为已解决）`
+            : `${effectiveRoleName} 角色资料全部录入并通过 AI 检查，已提交维护审核`,
         });
 
         message.success(
           isResubmission
-            ? `「${effectiveRole}」角色已提交维护审核，${openBlockCount} 项 Block 任务标记为已解决`
-            : `「${effectiveRole}」角色已提交维护审核`,
+            ? `「${effectiveRoleName}」角色已提交维护审核，${openBlockCount} 项 Block 任务标记为已解决`
+            : `「${effectiveRoleName}」角色已提交维护审核`,
         );
         router.push(`/workbench/${id}`);
       },
     });
-  }, [effectiveRole, router, id, setChecklistItems, setReviewElements, checklistItems, reviewElements, hasRejectedItems, allCtxBlockTasks, updateBlockTasks, addHistoryRecord, currentUser.name]);
+  }, [effectiveRole, effectiveRoleName, canSubmitReview, userResponsibleRoles, router, id, setChecklistItems, setReviewElements, checklistItems, reviewElements, hasRejectedItems, allCtxBlockTasks, updateBlockTasks, addHistoryRecord, currentUser.id, currentUser.name]);
 
   // --- AI check detail ---
 
@@ -488,16 +531,15 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center',
     },
     {
-      title: '类型', dataIndex: 'type', key: 'type', width: 80,
-    },
-    {
-      title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 260,
+      title: '标准', dataIndex: 'checkItem', key: 'checkItem', width: 260,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
       ...getClSearchProps('checkItem'),
     },
+    { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
     {
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
+      render: (role: string) => getRoleName(application, role),
     },
     {
       title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
@@ -586,9 +628,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
-        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
-        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
-        const canEdit = isRoleOwner || isDelegatedToMe;
+        const canEdit = canEditItem(record);
         if (!canEdit) {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
@@ -604,7 +644,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps, currentUser.id, userResponsibleRoles]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getClSearchProps, canEditItem, application]);
 
   // --- Table columns for review elements ---
 
@@ -613,14 +653,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center',
     },
     {
-      title: '标准', dataIndex: 'standard', key: 'standard', width: 100,
-    },
-    {
-      title: '说明', dataIndex: 'description', key: 'description', width: 220,
+      title: '评审要素', dataIndex: 'description', key: 'description', width: 220,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
       ...getReSearchProps('description'),
     },
+    { title: '类型', dataIndex: 'standard', key: 'standard', width: 100 },
     {
       title: '模板备注', dataIndex: 'remark', key: 'remark', width: 160,
       ellipsis: { showTitle: false },
@@ -628,6 +666,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     },
     {
       title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center',
+      render: (role: string) => getRoleName(application, role),
     },
     {
       title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 140, align: 'center',
@@ -716,9 +755,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         if (record.reviewStatus === 'passed') {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
-        const isDelegatedToMe = record.delegatedTo?.includes(currentUser.id) ?? false;
-        const isRoleOwner = userResponsibleRoles.includes(record.responsibleRole as PipelineRole);
-        const canEdit = isRoleOwner || isDelegatedToMe;
+        const canEdit = canEditItem(record);
         if (!canEdit) {
           return <span style={{ color: '#bfbfbf' }}>-</span>;
         }
@@ -734,7 +771,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
         );
       },
     },
-  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps, currentUser.id, userResponsibleRoles]);
+  ], [openEntryModal, openDelegateModal, showAiCheckDetail, getReSearchProps, canEditItem, application]);
 
   // --- Render ---
 
@@ -747,12 +784,14 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
     );
   }
 
-  if (application.status !== 'in_progress') {
-    const statusText = application.status === 'failed'
-      ? '维护SPM审核未通过，流程已终止'
-      : application.status === 'cancelled'
-        ? '该转维申请已取消'
-        : '该转维申请已完成';
+  if (!canMutate) {
+    const statusText = application.pipeline.maintenanceSpmReview === 'success'
+      ? '维护SPM审核已通过'
+      : application.status === 'failed'
+        ? '维护SPM审核未通过，流程已终止'
+        : application.status === 'cancelled'
+          ? '该转维申请已取消'
+          : '该转维申请已完成';
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <Alert type="warning" showIcon title={statusText} description="不可再进行资料录入操作" style={{ maxWidth: 560, margin: '0 auto 16px' }} />
@@ -798,21 +837,21 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
               setSelectedReviewKeys([]);
             }}
             options={userResponsibleRoles.map((r) => ({
-              label: `${r}角色`,
+              label: `${getRoleName(application, r)}角色`,
               value: r,
             }))}
             style={{ marginLeft: 8 }}
           />
         ) : effectiveRole ? (
           <Tag color="blue" style={{ marginLeft: 8, fontSize: 13 }}>
-            {effectiveRole}角色
+            {effectiveRoleName}角色
           </Tag>
         ) : null}
       </div>
 
       {/* Pipeline Progress */}
       <div style={{ background: '#fff', borderRadius: 8, padding: '8px 24px', marginBottom: 16 }}>
-        <PipelineProgress pipeline={application.pipeline} />
+        <PipelineProgress pipeline={application.pipeline} roles={application.roles} />
       </div>
 
       {/* 维护审核驳回提示：默认收起，展开后显示评审意见（一条）+ Block 任务列表（多条） */}
@@ -843,7 +882,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a' }}>
-                    「{effectiveRole}」角色维护审核不通过
+                    「{effectiveRoleName}」角色维护审核不通过
                   </div>
                   <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
                     请按评审意见修改资料后重新提交审核
@@ -922,7 +961,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                     {delegatedChecklistForMe.length > 0 && (
                       <>
                         <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
-                          转维材料 ({delegatedChecklistForMe.length})
+                          CheckList ({delegatedChecklistForMe.length})
                         </div>
                         <Table<CheckListItem>
                           rowKey="id"
@@ -961,7 +1000,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
       {/* Main card */}
       {userResponsibleRoles.length > 0 && (
         <div style={{ background: '#fff', borderRadius: 8, padding: 16 }}>
-          {/* Tabs: 转维材料 / 评审要素 */}
+          {/* Tabs: CheckList / 评审要素 */}
           <Tabs
             activeKey={activeTab}
             onChange={(key) => {
@@ -979,7 +1018,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 {effectiveRole && (
                   <Tooltip title={submitTooltip}>
                     <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={handleSubmitReview} disabled={!canSubmitReview}>
-                      提交{effectiveRole}审核
+                      提交{effectiveRoleName}审核
                     </Button>
                   </Tooltip>
                 )}
@@ -992,7 +1031,7 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                 key: 'checklist',
                 label: (
                   <Space size={6}>
-                    <span>转维材料 ({ownRoleChecklist.length})</span>
+                    <span>CheckList ({ownRoleChecklist.length})</span>
                     {pendingChecklistCount > 0 && (
                       <Tooltip title={`还有 ${pendingChecklistCount} 项未录入或AI检查未通过`}>
                         <Badge count={pendingChecklistCount} size="small" />
@@ -1005,10 +1044,12 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                     rowKey="id"
                     columns={checklistColumns}
                     dataSource={ownRoleChecklist as CheckListItem[]}
+                    locale={{ emptyText: '当前角色无待录入项' }}
                     pagination={false}
                     scroll={{ x: 1820 }}
                     size="middle"
                     rowSelection={{
+                      getCheckboxProps: record => ({ disabled: !canEditItem(record) }),
                       selectedRowKeys: selectedChecklistKeys,
                       onChange: setSelectedChecklistKeys,
                     }}
@@ -1032,17 +1073,19 @@ export default function DataEntryPage({ params }: { params: Promise<{ id: string
                     rowKey="id"
                     columns={reviewElementColumns}
                     dataSource={ownRoleReviewElements as ReviewElement[]}
+                    locale={{ emptyText: '当前角色无待录入项' }}
                     pagination={false}
                     scroll={{ x: 1920 }}
                     size="middle"
                     rowSelection={{
+                      getCheckboxProps: record => ({ disabled: !canEditItem(record) }),
                       selectedRowKeys: selectedReviewKeys,
                       onChange: setSelectedReviewKeys,
                     }}
                   />
                 ),
               },
-            ]}
+            ].filter(tab => !isTos || tab.key === 'checklist')}
           />
         </div>
       )}

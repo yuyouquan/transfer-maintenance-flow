@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Table, Tabs, Tag, Button, Space, Modal, Input, Select,
-  message, Tooltip, Divider, Alert, Collapse,
+  message, Tooltip, Divider, Alert, Collapse, Segmented,
 } from 'antd';
 import {
   ArrowLeftOutlined, PlusOutlined, DeleteOutlined,
@@ -14,7 +14,7 @@ import PipelineProgress from '@/components/pipeline/PipelineProgress';
 import { MOCK_USERS } from '@/mock';
 import { useApplications } from '@/context/ApplicationContext';
 import type {
-  CheckListItem, ReviewElement, ReviewStatus,
+  CheckListItem, ReviewElement, ReviewStatus, LegacyTask,
 } from '@/types';
 import type { ColumnsType } from 'antd/es/table';
 import { useCurrentUser } from '@/context/UserContext';
@@ -22,15 +22,8 @@ import EntryContentRenderer from '@/components/shared/EntryContentRenderer';
 import { useColumnSearch } from '@/components/shared/useColumnSearch';
 import DelegateModal from '@/components/shared/DelegateModal';
 import { LongTextCell } from '@/components/shared/LongTextCell';
-
-// Map team role to checklist responsibleRole
-const TEAM_ROLE_TO_RESPONSIBLE: Record<string, string> = {
-  SPM: 'SPM',
-  TPM: '测试',
-  '底软': '底软',
-  '系统': '系统',
-  '影像': '影像',
-};
+import { getItemRole, getRoleName, getUserRoles, findRoleMember } from '@/lib/workflow-roles';
+import { validateLegacyTaskInput } from '@/lib/legacy-tasks';
 
 const { TextArea } = Input;
 
@@ -87,7 +80,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const { currentUser } = useCurrentUser();
   const {
     applications, checklistItems: ctxChecklist, reviewElements: ctxReview,
-    updateChecklistItems, updateReviewElements, addHistoryRecord,
+    updateChecklistItems, updateReviewElements, updateLegacyTasks, addHistoryRecord,
   } = useApplications();
 
   const application = useMemo(
@@ -95,13 +88,23 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     [applications, id],
   );
 
-  // Determine user's responsible role from the maintenance team
-  const userResponsibleRole = useMemo(() => {
-    if (!application) return null;
-    const member = application.team.maintenance.find((m) => m.id === currentUser.id);
-    if (!member) return null;
-    return TEAM_ROLE_TO_RESPONSIBLE[member.role] ?? null;
-  }, [application, currentUser.id]);
+  const isTos = application?.projectType === 'tos';
+  const canMutate = application?.status === 'in_progress'
+    && application.pipeline.maintenanceSpmReview !== 'success';
+  const userResponsibleRoles = useMemo(
+    () => getUserRoles(application, 'maintenance', currentUser.id),
+    [application, currentUser.id],
+  );
+  const [activeRole, setActiveRole] = useState<string | null>(null);
+  const userResponsibleRole = activeRole && userResponsibleRoles.includes(activeRole)
+    ? activeRole : userResponsibleRoles[0] ?? null;
+  const canManageItem = useCallback((item: CheckListItem | ReviewElement) => Boolean(
+    canMutate && item.applicationId === id
+    && item.entryStatus === 'entered' && item.aiCheckStatus === 'passed'
+    && item.reviewStatus !== 'not_reviewed'
+    && (userResponsibleRoles.includes(getItemRole(item, 'review')) || item.reviewDelegatedTo?.includes(currentUser.id)),
+  ), [canMutate, id, userResponsibleRoles, currentUser.id]);
+  const canReviewItem = canManageItem;
 
   // Derived from context
   const allChecklistItems = useMemo(
@@ -109,8 +112,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     [ctxChecklist, id],
   );
   const allReviewElements = useMemo(
-    () => ctxReview.filter((i) => i.applicationId === id) as ReviewElement[],
-    [ctxReview, id],
+    () => isTos ? [] : ctxReview.filter((i) => i.applicationId === id) as ReviewElement[],
+    [ctxReview, id, isTos],
   );
 
   // Wrappers to update context directly
@@ -135,24 +138,18 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     [updateReviewElements, id],
   );
 
-  // Role-filtered views
-  const checklistItems = useMemo(() => {
-    if (!userResponsibleRole) return allChecklistItems;
-    return allChecklistItems.filter((i) =>
-      i.responsibleRole === userResponsibleRole
-      || i.reviewPersonId === currentUser.id
-      || i.delegatedTo?.includes(currentUser.id)
-    );
-  }, [allChecklistItems, userResponsibleRole, currentUser.id]);
-
-  const reviewElements = useMemo(() => {
-    if (!userResponsibleRole) return allReviewElements;
-    return allReviewElements.filter((i) =>
-      i.responsibleRole === userResponsibleRole
-      || i.reviewPersonId === currentUser.id
-      || i.delegatedTo?.includes(currentUser.id)
-    );
-  }, [allReviewElements, userResponsibleRole, currentUser.id]);
+  // Main tables contain the active review role; cross-role delegation stays in its own section.
+  const checklistItems = useMemo(
+    () => allChecklistItems.filter(item => getItemRole(item, 'review') === userResponsibleRole),
+    [allChecklistItems, userResponsibleRole],
+  );
+  const reviewElements = useMemo(
+    () => allReviewElements.filter(item => getItemRole(item, 'review') === userResponsibleRole),
+    [allReviewElements, userResponsibleRole],
+  );
+  const canReviewRole = Boolean(canMutate && userResponsibleRole
+    && checklistItems.length + reviewElements.length > 0
+    && [...checklistItems, ...reviewElements].every(canManageItem));
 
   // --- 被委派给当前用户的项目(跨角色聚合) ---
   const delegatedChecklistForMe = useMemo(
@@ -173,7 +170,8 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     delegatedChecklistForMe.length > 0 || delegatedReviewElementsForMe.length > 0;
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [activeTab, setActiveTab] = useState('checklist');
+  const [selectedTab, setActiveTab] = useState('checklist');
+  const activeTab = isTos ? 'checklist' : selectedTab;
   const [pendingItemReview, setPendingItemReview] = useState<PendingItemReview | null>(null);
   const [itemReviewRemark, setItemReviewRemark] = useState('');
 
@@ -182,6 +180,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const [delegateTarget, setDelegateTarget] = useState<{
     ids: ReadonlyArray<string>;
     tab: 'checklist' | 'review_element';
+    operatorId: string;
   } | null>(null);
   const [delegateCurrentAssignee, setDelegateCurrentAssignee] = useState<string | null>(null);
 
@@ -189,6 +188,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const [passModalOpen, setPassModalOpen] = useState(false);
   const [failModalOpen, setFailModalOpen] = useState(false);
   const [wantLegacy, setWantLegacy] = useState(false);
+  const [roleReviewTarget, setRoleReviewTarget] = useState<{ roleId: string; operatorId: string } | null>(null);
 
   // Fail form
   const [reviewComment, setReviewComment] = useState('');
@@ -203,16 +203,20 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   // --- All hooks must be above the early return ---
 
-  const currentRole = userResponsibleRole ?? 'SPM';
+  const currentRole = getRoleName(application, userResponsibleRole ?? '');
   const canAccessPage = Boolean(userResponsibleRole) || hasDelegatedItems;
-  const maintenanceMember = application?.team.maintenance.find((m) => m.id === currentUser.id);
+  const maintenanceMember = userResponsibleRole ? findRoleMember(application, 'maintenance', userResponsibleRole) : undefined;
+  const roleReviewTargetIsValid = canReviewRole && roleReviewTarget?.roleId === userResponsibleRole
+    && roleReviewTarget?.operatorId === currentUser.id;
 
   // --- Single item review ---
   // 行内通过/拒绝只影响该条;整角色重审走顶部「不通过」按钮(applyRoleReviewStatus)
   const handleItemReview = useCallback((itemId: string, type: 'checklist' | 'review_element', newStatus: 'passed' | 'rejected') => {
+    const item = (type === 'checklist' ? allChecklistItems : allReviewElements).find(row => row.id === itemId);
+    if (!item || !canReviewItem(item)) return;
     setItemReviewRemark('');
     setPendingItemReview({ ids: [itemId], type, status: newStatus, operatorId: currentUser.id, isBatch: false });
-  }, [currentUser.id]);
+  }, [currentUser.id, allChecklistItems, allReviewElements, canReviewItem]);
 
   // --- Batch review ---
   const handleBatchReview = useCallback((newStatus: 'passed' | 'rejected') => {
@@ -233,12 +237,9 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     const items = type === 'checklist' ? allChecklistItems : allReviewElements;
     const canReviewAll = ids.every((itemId) => {
       const item = items.find((candidate) => candidate.id === itemId);
-      return item && (
-        item.responsibleRole === userResponsibleRole
-        || item.reviewDelegatedTo?.includes(currentUser.id)
-      );
+      return item && canReviewItem(item);
     });
-    if (operatorId !== currentUser.id || application?.status !== 'in_progress' || !canReviewAll) {
+    if (operatorId !== currentUser.id || !canMutate || !ids.length || !canReviewAll) {
       message.warning('审核记录或当前用户已变更，请重新选择记录');
       setPendingItemReview(null);
       setItemReviewRemark('');
@@ -259,11 +260,16 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setPendingItemReview(null);
     setItemReviewRemark('');
     message.success(`${isBatch ? '批量' : ''}${status === 'passed' ? '通过' : '不通过'} ${ids.length} 条记录`);
-  }, [pendingItemReview, itemReviewRemark, allChecklistItems, allReviewElements, userResponsibleRole,
-    currentUser.id, application?.status, setAllChecklistItems, setAllReviewElements]);
+  }, [pendingItemReview, itemReviewRemark, allChecklistItems, allReviewElements, canReviewItem,
+    currentUser.id, canMutate, setAllChecklistItems, setAllReviewElements]);
 
   const openDelegateModal = useCallback(
     (ids: ReadonlyArray<string>, tab: 'checklist' | 'review_element') => {
+      const items = tab === 'checklist' ? allChecklistItems : allReviewElements;
+      if (!ids.length || !ids.every(itemId => {
+        const item = items.find(row => row.id === itemId);
+        return item && canManageItem(item);
+      })) return;
       // 当对单条委派(ids.length === 1)且该条已有 reviewDelegatedTo,回填以便支持转委派
       let current: string | null = null;
       if (ids.length === 1) {
@@ -272,15 +278,24 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
           : allReviewElements.find((i) => i.id === ids[0]);
         current = item?.reviewDelegatedTo?.[0] ?? null;
       }
-      setDelegateTarget({ ids, tab });
+      setDelegateTarget({ ids, tab, operatorId: currentUser.id });
       setDelegateCurrentAssignee(current);
       setDelegateModalOpen(true);
     },
-    [allChecklistItems, allReviewElements],
+    [allChecklistItems, allReviewElements, canManageItem, currentUser.id],
   );
 
   const handleDelegateConfirm = useCallback((toUserId: string | null) => {
     if (!delegateTarget) return;
+    const items = delegateTarget.tab === 'checklist' ? allChecklistItems : allReviewElements;
+    if (delegateTarget.operatorId !== currentUser.id || !delegateTarget.ids.length || !delegateTarget.ids.every(itemId => {
+      const item = items.find(row => row.id === itemId);
+      return item && canManageItem(item);
+    }) || (toUserId !== null && !MOCK_USERS.some(user => user.id === toUserId))) {
+      message.warning('当前用户、申请或记录已变化，请重新选择委派项');
+      setDelegateModalOpen(false);
+      return;
+    }
     const idSet = new Set(delegateTarget.ids);
 
     const updateItem = <T extends CheckListItem | ReviewElement>(item: T): T => {
@@ -307,12 +322,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     } else {
       message.success('已取消委派');
     }
-  }, [delegateTarget, setAllChecklistItems, setAllReviewElements]);
+  }, [delegateTarget, setAllChecklistItems, setAllReviewElements, allChecklistItems, allReviewElements, canManageItem, currentUser.id]);
 
   // Helper: update all items of current role to a given reviewStatus
   const applyRoleReviewStatus = useCallback((newStatus: ReviewStatus, comment?: string) => {
+    if (!roleReviewTargetIsValid) return false;
     const isMyRoleItem = (item: CheckListItem | ReviewElement) =>
-      item.responsibleRole === userResponsibleRole;
+      getItemRole(item, 'review') === userResponsibleRole;
 
     // 驳回时重置 aiCheckStatus，强制研发侧重新修改并触发AI检查后才能再提交；
     // 同一次角色级驳回事件共享一条评审意见（comment）。
@@ -331,20 +347,52 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
     setAllChecklistItems((prev) => prev.map(updateItem));
     setAllReviewElements((prev) => prev.map(updateItem));
-  }, [setAllChecklistItems, setAllReviewElements, userResponsibleRole]);
+    return true;
+  }, [setAllChecklistItems, setAllReviewElements, userResponsibleRole, roleReviewTargetIsValid]);
 
   // --- Pass confirm ---
   const handlePassConfirm = useCallback(() => {
+    if (!application || !roleReviewTargetIsValid) {
+      message.warning('当前用户、角色或材料状态已变化，请重新发起审核');
+      setPassModalOpen(false);
+      return;
+    }
+    const tasksToCreate: LegacyTask[] = [];
     if (wantLegacy) {
-      const hasEmpty = legacyTasks.some(
-        (t) => !t.responsiblePerson || !t.department || !t.description || !t.deadline
-      );
-      if (hasEmpty) {
-        message.warning('请填写完整所有遗留任务信息');
+      if (!legacyTasks.length) {
+        message.warning('请至少填写一项遗留任务');
         return;
       }
+      for (const task of legacyTasks) {
+        const result = validateLegacyTaskInput({
+          responsiblePersonId: task.responsiblePerson,
+          department: task.department,
+          description: task.description,
+          deadline: task.deadline,
+        }, MOCK_USERS);
+        if (result.error || !result.values) {
+          message.warning(result.error ?? '请填写完整所有遗留任务信息');
+          return;
+        }
+        tasksToCreate.push({
+          ...result.values,
+          id: `legacy-${crypto.randomUUID()}`,
+          applicationId: id,
+          status: 'open',
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
-    applyRoleReviewStatus('passed');
+    if (!applyRoleReviewStatus('passed')) return;
+    if (tasksToCreate.length) {
+      updateLegacyTasks(previous => [...previous, ...tasksToCreate]);
+      tasksToCreate.forEach(task => addHistoryRecord({
+        applicationId: id,
+        action: '新增遗留任务',
+        operator: currentUser.name,
+        detail: `领域审核通过时新增任务「${task.description}」；责任人：${task.responsiblePerson}；状态：未解决`,
+      }));
+    }
     addHistoryRecord({
       applicationId: id,
       action: `${currentRole} 维护审核通过`,
@@ -356,10 +404,15 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setWantLegacy(false);
     setLegacyTasks([{ responsiblePerson: '', department: '', description: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  }, [wantLegacy, legacyTasks, applyRoleReviewStatus, router, id, addHistoryRecord, currentRole, currentUser.name]);
+  }, [application, roleReviewTargetIsValid, wantLegacy, legacyTasks, applyRoleReviewStatus, updateLegacyTasks, router, id, addHistoryRecord, currentRole, currentUser.name]);
 
   // --- Fail confirm ---
   const handleFailConfirm = useCallback(() => {
+    if (!roleReviewTargetIsValid) {
+      message.warning('当前用户、角色或材料状态已变化，请重新发起审核');
+      setFailModalOpen(false);
+      return;
+    }
     if (!reviewComment.trim()) {
       message.warning('请填写评审意见');
       return;
@@ -371,7 +424,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       message.warning('请填写完整所有Block任务信息');
       return;
     }
-    applyRoleReviewStatus('rejected', reviewComment.trim());
+    if (!applyRoleReviewStatus('rejected', reviewComment.trim())) return;
     addHistoryRecord({
       applicationId: id,
       action: `${currentRole} 维护审核被拒绝`,
@@ -383,7 +436,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     setReviewComment('');
     setBlockTasks([{ description: '', resolution: '', responsiblePerson: '', department: '', deadline: '' }]);
     router.push(`/workbench/${id}`);
-  }, [reviewComment, blockTasks, applyRoleReviewStatus, router, id, addHistoryRecord, currentRole, currentUser.name]);
+  }, [roleReviewTargetIsValid, reviewComment, blockTasks, applyRoleReviewStatus, router, id, addHistoryRecord, currentRole, currentUser.name]);
 
   // --- Block task CRUD ---
   const addBlockTask = useCallback(() => {
@@ -452,12 +505,14 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     );
   }
 
-  if (application.status !== 'in_progress') {
-    const statusText = application.status === 'failed'
-      ? '维护SPM审核未通过，流程已终止'
-      : application.status === 'cancelled'
-        ? '该转维申请已取消'
-        : '该转维申请已完成';
+  if (!canMutate) {
+    const statusText = application.pipeline.maintenanceSpmReview === 'success'
+      ? '维护SPM审核已通过'
+      : application.status === 'failed'
+        ? '维护SPM审核未通过，流程已终止'
+        : application.status === 'cancelled'
+          ? '该转维申请已取消'
+          : '该转维申请已完成';
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <Alert
@@ -475,14 +530,14 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- Checklist columns ---
   const checklistColumns: ColumnsType<CheckListItem> = [
     { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
-    { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
     {
-      title: '评审要素', dataIndex: 'checkItem', key: 'checkItem', width: 260,
+      title: '标准', dataIndex: 'checkItem', key: 'checkItem', width: 260,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
       ...getClSearchProps('checkItem'),
     },
-    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
+    { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
+    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center', render: (role: string) => getRoleName(application, role) },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
@@ -494,7 +549,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         return (
           <Space size={4} wrap>
             <span>{text}</span>
-            {record.delegatedTo && record.delegatedTo.length > 0 && (
+            {record.reviewDelegatedTo && record.reviewDelegatedTo.length > 0 && (
               <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
             )}
             {reviewDelegateeName && (
@@ -551,14 +606,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     {
       title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: CheckListItem) => {
-        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
-        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
-        const canReviewItem = isRoleOwner || isDelegatedToMe;
-        const canDelegate = isRoleOwner || isDelegatedToMe;
+        const mayReview = canReviewItem(record);
+        const canDelegate = canManageItem(record);
 
         return (
           <Space size={4}>
-            {canReviewItem && (
+            {mayReview && (
               <>
                 <Button type="link" size="small" icon={<CheckCircleOutlined />}
                   style={{ color: '#52c41a' }}
@@ -586,19 +639,19 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   // --- Review element columns ---
   const reviewElementColumns: ColumnsType<ReviewElement> = [
     { title: '序号', dataIndex: 'seq', key: 'seq', width: 60, align: 'center' },
-    { title: '标准', dataIndex: 'standard', key: 'standard', width: 100 },
     {
-      title: '说明', dataIndex: 'description', key: 'description', width: 220,
+      title: '评审要素', dataIndex: 'description', key: 'description', width: 220,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
       ...getReSearchProps('description'),
     },
+    { title: '类型', dataIndex: 'standard', key: 'standard', width: 100 },
     {
       title: '模板备注', dataIndex: 'remark', key: 'remark', width: 140,
       ellipsis: { showTitle: false },
       render: (text: string) => <Tooltip title={text}>{text}</Tooltip>,
     },
-    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center' },
+    { title: '责任角色', dataIndex: 'responsibleRole', key: 'responsibleRole', width: 80, align: 'center', render: (role: string) => getRoleName(application, role) },
     { title: '资料录入-责任人', dataIndex: 'entryPerson', key: 'entryPerson', width: 110, align: 'center' },
     {
       title: '人工审核-责任人', dataIndex: 'reviewPerson', key: 'reviewPerson', width: 140, align: 'center',
@@ -610,7 +663,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         return (
           <Space size={4} wrap>
             <span>{text}</span>
-            {record.delegatedTo && record.delegatedTo.length > 0 && (
+            {record.reviewDelegatedTo && record.reviewDelegatedTo.length > 0 && (
               <Tag color="purple" style={{ fontSize: 11, marginRight: 0 }}>已委派</Tag>
             )}
             {reviewDelegateeName && (
@@ -667,14 +720,12 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     {
       title: '操作', key: 'actions', width: 200, align: 'center', fixed: 'right',
       render: (_: unknown, record: ReviewElement) => {
-        const isDelegatedToMe = record.reviewDelegatedTo?.includes(currentUser.id) ?? false;
-        const isRoleOwner = !!userResponsibleRole && record.responsibleRole === userResponsibleRole;
-        const canReviewItem = isRoleOwner || isDelegatedToMe;
-        const canDelegate = isRoleOwner || isDelegatedToMe;
+        const mayReview = canReviewItem(record);
+        const canDelegate = canManageItem(record);
 
         return (
           <Space size={4}>
-            {canReviewItem && (
+            {mayReview && (
               <>
                 <Button type="link" size="small" icon={<CheckCircleOutlined />}
                   style={{ color: '#52c41a' }}
@@ -703,8 +754,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     selectedRowKeys,
     onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
     getCheckboxProps: (record: CheckListItem | ReviewElement) => ({
-      disabled: record.responsibleRole !== userResponsibleRole
-        && !record.reviewDelegatedTo?.includes(currentUser.id),
+      disabled: !canManageItem(record),
     }),
   };
 
@@ -717,16 +767,20 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         </Button>
         <h2 style={{ margin: 0 }}>维护审核</h2>
         <span style={{ color: '#888', fontSize: 14 }}>{application.projectName}</span>
-        {userResponsibleRole && (
-          <Tag color="blue" style={{ marginLeft: 8, fontSize: 13 }}>
-            {currentRole}角色
-          </Tag>
-        )}
+        {userResponsibleRoles.length > 1 ? (
+          <Segmented
+            value={userResponsibleRole ?? ''}
+            options={userResponsibleRoles.map(role => ({ value: role, label: `${getRoleName(application, role)}角色` }))}
+            onChange={role => { setActiveRole(String(role)); setSelectedRowKeys([]); }}
+          />
+        ) : userResponsibleRole ? (
+          <Tag color="blue" style={{ marginLeft: 8, fontSize: 13 }}>{currentRole}角色</Tag>
+        ) : null}
       </div>
 
       {/* Pipeline */}
       <div style={{ background: '#fff', borderRadius: 8, padding: '8px 24px', marginBottom: 16 }}>
-        <PipelineProgress pipeline={application.pipeline} />
+        <PipelineProgress pipeline={application.pipeline} roles={application.roles} />
       </div>
 
       {/* Sticky review action bar */}
@@ -773,10 +827,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                 <Divider type="vertical" />
               </>
             )}
-            <Button danger onClick={() => setFailModalOpen(true)} icon={<CloseCircleOutlined />}>
+            <Button danger disabled={!canReviewRole} onClick={() => { if (!userResponsibleRole) return; setRoleReviewTarget({ roleId: userResponsibleRole, operatorId: currentUser.id }); setFailModalOpen(true); }} icon={<CloseCircleOutlined />}>
               不通过
             </Button>
-            <Button type="primary" onClick={() => setPassModalOpen(true)} icon={<CheckCircleOutlined />}
+            <Button type="primary" disabled={!canReviewRole} onClick={() => { if (!userResponsibleRole) return; setRoleReviewTarget({ roleId: userResponsibleRole, operatorId: currentUser.id }); setPassModalOpen(true); }} icon={<CheckCircleOutlined />}
               style={{ background: '#52c41a', borderColor: '#52c41a' }}>
               通过
             </Button>
@@ -802,7 +856,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                     {delegatedChecklistForMe.length > 0 && (
                       <>
                         <div style={{ marginBottom: 8, fontWeight: 500, color: '#666' }}>
-                          转维材料 ({delegatedChecklistForMe.length})
+                          CheckList ({delegatedChecklistForMe.length})
                         </div>
                         <Table<CheckListItem>
                           rowKey="id"
@@ -847,12 +901,13 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
             items={[
               {
                 key: 'checklist',
-                label: `转维材料 (${checklistItems.length})`,
+                label: `CheckList (${checklistItems.length})`,
                 children: (
                   <Table<CheckListItem>
                     rowKey="id"
                     columns={checklistColumns}
                     dataSource={checklistItems}
+                    locale={{ emptyText: '当前角色无待审核项' }}
                     rowSelection={rowSelection}
                     scroll={{ x: 1820 }}
                     pagination={false}
@@ -868,6 +923,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                     rowKey="id"
                     columns={reviewElementColumns}
                     dataSource={reviewElements}
+                    locale={{ emptyText: '当前角色无待审核项' }}
                     rowSelection={rowSelection}
                     scroll={{ x: 1920 }}
                     pagination={false}
@@ -875,7 +931,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
                   />
                 ),
               },
-            ]}
+            ].filter(tab => !isTos || tab.key === 'checklist')}
           />
         </div>
       )}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { UserProvider } from '@/context/UserContext';
 import { ApplicationProvider } from '@/context/ApplicationContext';
+import { ConfigurationProvider } from '@/context/ConfigurationContext';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default function RootLayout({
       <body>
         <AntdRegistry>
           <UserProvider>
-            <ApplicationProvider>{children}</ApplicationProvider>
+            <ConfigurationProvider><ApplicationProvider>{children}</ApplicationProvider></ConfigurationProvider>
           </UserProvider>
         </AntdRegistry>
       </body>

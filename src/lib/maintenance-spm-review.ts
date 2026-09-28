@@ -1,11 +1,12 @@
 import type { TransferApplication } from '@/types';
+import { getSpmMember } from '@/lib/workflow-roles';
 
 /** 工作台入口、待办和审核确认共用同一套责任人及阶段规则。 */
 export function getMaintenanceSpmReviewAccess(
   application: TransferApplication | undefined,
   userId: string,
 ) {
-  const reviewer = application?.team.maintenance.find(member => member.role === 'SPM');
+  const reviewer = application ? getSpmMember(application, 'maintenance') : undefined;
   const isReviewer = reviewer?.id === userId;
   const isActive = application?.status === 'in_progress';
   const roleProgress = application?.pipeline.roleProgress ?? [];
